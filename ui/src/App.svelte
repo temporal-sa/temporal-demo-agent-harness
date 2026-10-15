@@ -2,6 +2,7 @@
   import { createHarnessContext } from "@temporalio/agent-harness-svelte";
   import { createTrip, loadView, newSessionId, type PageView } from "./api.ts";
   import logo from "./assets/temporal-logo.svg";
+  import { motion, toggleMotion } from "./motion.svelte.ts";
   import Trip from "./Trip.svelte";
 
   createHarnessContext();
@@ -60,7 +61,7 @@
   const consoleLink = $derived(sessionId ? `console/?s=${encodeURIComponent(sessionId)}` : "console/");
 </script>
 
-<div class="app">
+<div class="app" class:motion-paused={motion.paused}>
   <header class="topbar">
     <div class="brand">
       <img src={logo} alt="Temporal" width="132" height="34" />
@@ -74,6 +75,11 @@
         <a class="button small secondary ultraviolet" href={workflowLink} target="_blank" rel="noreferrer">Temporal UI ↗</a>
       {/if}
       <a class="button small secondary ultraviolet" href={consoleLink}>Harness console</a>
+      {#if !motion.reduced}
+        <button class="button small secondary ultraviolet" aria-pressed={motion.paused} onclick={toggleMotion}>
+          {motion.paused ? "Play motion" : "Pause motion"}
+        </button>
+      {/if}
       <button class="button small primary ultraviolet" onclick={newTrip} disabled={!view || creating !== null}>
         New trip
       </button>

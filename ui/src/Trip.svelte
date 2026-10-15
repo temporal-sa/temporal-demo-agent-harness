@@ -3,7 +3,12 @@
   import type { MontyChatAgent, TripBoard as Board } from "./generated/MontyChatAgent.ts";
   import ApprovalCard from "./ApprovalCard.svelte";
   import Conversation from "./Conversation.svelte";
-  import TripBoard from "./TripBoard.svelte";
+  import { MODELS, type Model, type Policy } from "./format.ts";
+  import Settings from "./Settings.svelte";
+  import Departures from "./Departures.svelte";
+  import { motion } from "./motion.svelte.ts";
+  import RouteMap from "./RouteMap.svelte";
+  import { departures } from "./travel.ts";
 
   let { sessionId }: { sessionId: string } = $props();
 
@@ -23,11 +28,48 @@
   );
   const messages = $derived([...agent.messages, ...agent.pending]);
 
-  // A message stays "sending" until a worker accepts its Update, and the stream reconnects
-  // when it can't reach the agent. Either one lasting long enough to notice means no worker
-  // is answering.
+  // The agent's settings are whatever its latest model and policy messages set. A change shows
+  // as soon as it is sent and drops back if the agent refuses it.
+  type Message = (typeof messages)[number];
+  type Sent<H extends Message["handler"]> = Extract<Message, { handler: H }>;
+  const latest = <H extends Message["handler"]>(handler: H) =>
+    messages.findLast((m): m is Sent<H> => m.handler === handler && m.status !== "error");
+
+  const model: Model = $derived(latest("set_model")?.input.model ?? MODELS[0]);
+  const policy: Policy | null = $derived(latest("set_approval_policy")?.input.new_policy ?? null);
+
+  // The page can't see a worker die: the stream just goes quiet. Monty's travel calls take a
+  // few seconds, so one still running well past that means no worker is answering. Temporal
+  // retries it on the next worker once its 30-second start-to-close timeout passes.
+  const STALLED_MS = 12_000;
+  const TRAVEL_CALLS = new Set(["search_flights", "search_hotels", "book_flight", "book_hotel"]);
+  const runningSince = new Map<string, number>();
+  let now = $state(Date.now());
+  const running = $derived(
+    Object.values(agent.agents).flatMap((view) =>
+      view.messages.flatMap((m) =>
+        m.parts.filter((p) => p.type === "tool" && p.state === "running" && TRAVEL_CALLS.has(p.toolName)),
+      ),
+    ) as { toolId: string }[],
+  );
+  $effect(() => {
+    if (running.length === 0) return;
+    const timer = setInterval(() => (now = Date.now()), 1000);
+    return () => clearInterval(timer);
+  });
+  const stalled = $derived(
+    running.some(({ toolId }) => {
+      if (!runningSince.has(toolId)) runningSince.set(toolId, Date.now());
+      return now - runningSince.get(toolId)! > STALLED_MS;
+    }),
+  );
+
+  // A message also stays "sending" until a worker accepts its Update, and the stream
+  // reconnects when it can't reach the agent. Any of these lasting long enough to notice
+  // means no worker is answering.
   const waiting = $derived(
-    agent.connection === "connecting" ||
+    stalled ||
+      agent.connection === "connecting" ||
       agent.connection === "reconnecting" ||
       agent.pending.some((message) => message.status === "sending"),
   );
@@ -40,6 +82,9 @@
     const timer = setTimeout(() => (away = true), 1500);
     return () => clearTimeout(timer);
   });
+
+  const rows = $derived(departures(Object.values(agent.agents), board));
+  const still = $derived(motion.paused || motion.reduced);
 
   let draft = $state("");
 
@@ -54,7 +99,10 @@
 </script>
 
 <main class="workspace">
-  <TripBoard {board} />
+  <div class="travel">
+    <RouteMap {rows} {away} {still} />
+    <Departures {rows} {board} {away} {still} />
+  </div>
 
   <div class="side">
     {#if away}
@@ -78,8 +126,15 @@
     <Conversation {messages} />
 
     {#each agent.pendingApprovals as call (call.part.toolId)}
-      <ApprovalCard {call} respond={(approved) => agent.respondToApproval(call.part.toolId, { approved })} />
+      <ApprovalCard {call} respond={(decision) => agent.respondToApproval(call.part.toolId, decision)} />
     {/each}
+
+    <Settings
+      {model}
+      {policy}
+      setModel={(next) => void agent.sendMessage("set_model", { model: next })}
+      setPolicy={(next) => void agent.sendMessage("set_approval_policy", { new_policy: next })}
+    />
 
     <form class="composer" onsubmit={send}>
       <label class="visually-hidden" for="composer">Message Monty</label>
@@ -105,6 +160,7 @@
     flex: 1; min-height: 0; display: grid; gap: 1rem;
     grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
   }
+  .travel { display: grid; grid-template-rows: minmax(12rem, 1fr) minmax(14rem, 1.15fr); gap: 1rem; min-height: 0; }
   .side { display: flex; flex-direction: column; gap: .8rem; min-height: 0; }
   .side > :global(.conversation) { flex: 1; }
   .recovering { border-color: var(--yellow); display: grid; gap: .5rem; }

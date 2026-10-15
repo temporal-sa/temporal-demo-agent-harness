@@ -108,6 +108,10 @@ def owner_prefix(request: Request) -> str:
             raise HTTPException(status_code=401, detail="Sign-in required")
     else:
         subject = DEV_USER
+    return prefix_for(subject)
+
+
+def prefix_for(subject: str) -> str:
     # A hash keeps email addresses and SSO subjects out of workflow IDs.
     owner = hashlib.sha256(subject.encode()).hexdigest()[:16]
     return f"{config.TASK_QUEUE}.{owner}."

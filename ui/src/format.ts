@@ -30,9 +30,25 @@ export function toolBadge(state: ToolState): { label: string; tone: "progress" |
   }
 }
 
-/** Splits `**bold**` out of model text, the only markdown Monty's replies lean on. */
-export function emphasis(text: string): { text: string; bold: boolean }[] {
-  return text.split(/\*\*(.+?)\*\*/g).map((segment, i) => ({ text: segment, bold: i % 2 === 1 }));
+export const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+
+export type Policy = "allow_safe" | "strict" | "dangerously_skip_all";
+
+/** What Monty asks about before any `set_approval_policy`: everything but its own trip board. */
+export const DEFAULT_POLICY_HINT = "Monty asks before each script, search, and booking.";
+
+/** What each policy `set_approval_policy` accepts asks a person to approve. */
+export const POLICIES: { value: Policy; label: string; hint: string }[] = [
+  { value: "strict", label: "Ask for everything", hint: "Every tool call waits for you, trip board included." },
+  { value: "allow_safe", label: "Trust scripts", hint: "Scripts and the trip board run; searches and bookings still ask." },
+  { value: "dangerously_skip_all", label: "Never ask", hint: "Every tool call runs without approval." },
+];
+
+export function policyLabel(policy: Policy): string {
+  return POLICIES.find((p) => p.value === policy)?.label ?? policy;
 }
 
-export const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+export type Model = "gemini-3.8-flash" | "gemini-3.1-flash-lite";
+
+/** The models `set_model` accepts; the first is the agent's default. */
+export const MODELS: Model[] = ["gemini-3.8-flash", "gemini-3.1-flash-lite"];

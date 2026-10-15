@@ -47,4 +47,5 @@ async def connect(plugins: list[Plugin]) -> Client:
     # Address, namespace, and credentials come from TEMPORAL_* variables only, never from a
     # developer's temporal.toml, whose default profile might point at a real namespace.
     config = ClientConfig.load_client_connect_config(disable_file=True)
+    config.setdefault("target_host", "localhost:7233")
     return await Client.connect(**config, plugins=plugins)

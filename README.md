@@ -33,6 +33,15 @@ uv run python -m agent_harness_demo worker     # terminal 1
 uv run python -m agent_harness_demo web        # terminal 2, then open http://localhost:8000
 ```
 
+To see the demo view without a Gemini key, play a scripted trip through a script-only Monty agent. The Workflow, Activities, approvals, trip board, map, and departures board all run as usual; only the model's replies are missing:
+
+```bash
+uv run python -m scripts.preview_trip                 # asks before each search and booking
+uv run python -m scripts.preview_trip --no-approvals  # runs straight through
+```
+
+It prints a link to open. Stop the worker while a booking runs to see the delayed state, then start it again.
+
 Without the UI build, `/` redirects to the console. To work on the demo view, run `npm run dev` in `ui/` and open http://localhost:5173; it proxies the API to the web process on :8000.
 
 Or run both processes in containers against the same dev server:
