@@ -1,0 +1,85 @@
+# Draft DemoProject for the tmprl-demo.cloud registry. It belongs at
+# projects/demo/agent-harness.yaml in temporal-sa/tmprl-demo-cloud-registry, where it
+# replaces projects/demo/monty.yaml and deployments/monty/. Kept here until it is submitted.
+# The payload role ARN and bucket below are stand-ins (REPLACE-*), because the real ones stay
+# out of this public repository. Copy them from the registry's Monty project.
+apiVersion: registry.tmprl-demo.cloud/v1alpha1
+kind: DemoProject
+metadata:
+  name: agent-harness
+spec:
+  registry:
+    title: Agent Harness Travel Agent
+    summary: >-
+      Chat with Monty, a travel agent that writes and runs sandboxed Python whose every
+      booking is a durable Temporal Activity. Approve its tool calls, watch the trip board
+      update, then crash the worker mid-booking and see the conversation pick up where it was.
+    tags: [AI, AI - Agents, Human-in-the-Loop]
+    temporalSdks: [Python]
+    links:
+      runbook:
+        label: README
+        url: https://github.com/temporal-sa/temporal-demo-agent-harness#readme
+    crashable:
+      enabled: true
+      taskQueueEnv: TEMPORAL_TASK_QUEUE
+      baseTaskQueue: agent-harness
+
+  source:
+    repo: https://github.com/temporal-sa/temporal-demo-agent-harness
+
+  builds:
+    app:
+      context: .
+      dockerfile: Dockerfile
+
+  secrets:
+    gemini:
+      shared: gemini
+      requiredProperties: [GEMINI_API_KEY]
+
+  components:
+    web:
+      build: app
+      args: [web]
+      temporalAccess: true
+      awsIamRoleArn: arn:aws:iam::000000000000:role/REPLACE-payload-role
+      env:
+        - name: TRUST_AUTH_HEADERS
+          value: "true"
+        - name: PAYLOAD_BUCKET
+          value: REPLACE-payload-bucket
+        - name: AWS_DEFAULT_REGION
+          value: us-west-1
+      ports:
+        - name: http
+          containerPort: 8000
+          servicePort: 80
+    worker:
+      build: app
+      args: [worker]
+      worker:
+        versioning:
+          enabled: true
+          deploymentName: agent-harness
+      autoscaling:
+        taskQueue: agent-harness
+        minReplicas: 0
+      awsIamRoleArn: arn:aws:iam::000000000000:role/REPLACE-payload-role
+      secrets: [gemini]
+      env:
+        - name: PAYLOAD_BUCKET
+          value: REPLACE-payload-bucket
+        - name: AWS_DEFAULT_REGION
+          value: us-west-1
+
+  ingress:
+    subdomain: agent-harness
+    temporalAuthRequired: true
+    component: web
+    port: http
+
+  smokeCheck:
+    path: /api/health
+    expectedStatus: 200
+    timeoutSeconds: 15

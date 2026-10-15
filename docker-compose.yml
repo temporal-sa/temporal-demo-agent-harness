@@ -1,0 +1,34 @@
+# Runs the same two processes as the catalog deployment, against a Temporal dev server on
+# the host: `temporal server start-dev`, then `GEMINI_API_KEY=... docker compose up --build`.
+
+x-app: &app
+  build: .
+  environment: &env
+    TEMPORAL_ADDRESS: host.docker.internal:7233
+    TEMPORAL_NAMESPACE: default
+    TEMPORAL_TASK_QUEUE: agent-harness
+    PAYLOAD_DIR: /payloads
+  volumes:
+    - payloads:/payloads
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+
+services:
+  web:
+    <<: *app
+    command: ["web"]
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 5s
+
+  worker:
+    <<: *app
+    command: ["worker"]
+    environment:
+      <<: *env
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+
+volumes:
+  payloads:

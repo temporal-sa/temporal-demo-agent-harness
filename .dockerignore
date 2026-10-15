@@ -1,0 +1,7 @@
+.venv
+.git
+.pytest_cache
+**/__pycache__
+**/node_modules
+agent_harness_demo/ui_dist
+tests
