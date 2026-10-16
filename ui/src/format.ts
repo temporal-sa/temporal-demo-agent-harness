@@ -61,8 +61,10 @@ export function callSummary(toolName: string, input: Record<string, unknown>): s
       return `${req.origin} → ${req.destination} · ${req.date}`;
     case "search_hotels":
       return `${req.city} · ${req.check_in} → ${req.check_out}`;
+    case "get_seat_map":
+      return req.flight_id;
     case "book_flight":
-      return `${req.flight_id} · ${req.passenger_name}`;
+      return [req.flight_id, req.fare ?? "economy", req.seat ?? "any seat", req.passenger_name].join(" · ");
     case "book_hotel":
       return `${req.hotel_id} · ${req.guest_name}`;
     default: {

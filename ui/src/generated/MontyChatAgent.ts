@@ -8,6 +8,8 @@ export interface Booking {
   confirmation_code: string;
   detail: string;
   price_usd: number;
+  fare: string | null;
+  seat: string | null;
 }
 /**
  * Selected tool approval policy name.

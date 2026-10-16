@@ -96,6 +96,14 @@ the calls plainly rather than wrapping each one in try/except.
   Book independent choices the same way, once the traveler has picked them."""
 
 
+# Shared with the subagent variant's prompt, like the guidance above.
+BOOKING_GUIDANCE = """\
+- Flights come in economy, premium, and business fares. Before booking, ask which the \
+traveler wants if they haven't said, and offer a seat: fetch `get_seat_map` for every leg at \
+once and suggest a few that fit (window, aisle, together). Book with the fare and seat they \
+chose, and record both with the booking."""
+
+
 def system_instruction(base: str, context: TravelerContext | None) -> str:
     """The prompt for one session: the shared instructions, then the traveler's date.
 
@@ -117,6 +125,7 @@ and state them.
 - When you have enough to make progress, WRITE A SCRIPT and call `run_travel_code`. Keep each \
 script focused (search, or book, or summarize) so you can react to results.
 {CONCURRENCY_GUIDANCE}
+{BOOKING_GUIDANCE}
 - After a tool result, read it and reply to the user in plain, friendly prose — summarize \
 options, prices, confirmations. You may run more scripts in follow-up turns as the \
 conversation continues.

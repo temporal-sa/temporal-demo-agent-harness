@@ -1,6 +1,6 @@
 # Agent Harness: Monty the travel agent
 
-Monty is a conversational travel agent built on the [Temporal Agent Harness](https://github.com/temporal-community/temporal-agent-harness). You ask for a trip, and the model writes a short Python script that runs in a [pydantic-monty](https://pypi.org/project/pydantic-monty/) sandbox. Each flight or hotel search and booking in that script is a durable Temporal Activity, and each tool call waits for your approval. The trip board shows what's booked and what's left, and it updates as the bookings land.
+Monty is a conversational travel agent built on the [Temporal Agent Harness](https://github.com/temporal-community/temporal-agent-harness). You ask for a trip, and the model writes a short Python script that runs in a [pydantic-monty](https://pypi.org/project/pydantic-monty/) sandbox. Each flight or hotel search, seat map, and booking in that script is a durable Temporal Activity, and each tool call waits for your approval. Flights come in economy, premium, and business fares, and Monty offers seats from the flight's seat map before it books. The trip board shows what's booked and what's left, and it updates as the bookings land.
 
 Because the conversation is a Workflow, you can kill the worker in the middle of a booking. When a worker comes back, the agent carries on from the same step, with the same approvals and the same trip board.
 

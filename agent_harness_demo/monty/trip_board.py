@@ -77,6 +77,10 @@ class Booking(HarnessState):
     detail: str
     """Human-readable: airline, times, hotel name, nights — whatever the reader needs."""
     price_usd: float = 0.0
+    fare: str | None = None
+    """A flight's fare level, as `book_flight` returned it."""
+    seat: str | None = None
+    """A flight's seat, as `book_flight` returned it."""
 
 
 class Trip(HarnessState):
@@ -120,6 +124,8 @@ class RecordBookingRequest(BaseModel):
     confirmation_code: str
     detail: str
     price_usd: float = 0.0
+    fare: str | None = None
+    seat: str | None = None
     completes: list[str] = []
     """Checklist items this booking finishes, ticked off in the same commit."""
 
@@ -152,8 +158,11 @@ def _render(board: TripBoard) -> str:
         lines.append(f"[{trip.trip_id}] {trip.description} — {trip.traveler} ({trip.status})")
         for booking in [*trip.flights, *trip.hotels]:
             price = f" ${booking.price_usd:,.2f}" if booking.price_usd else ""
+            notes = [n for n in (booking.fare, booking.seat and f"seat {booking.seat}") if n]
+            notes_text = f" ({', '.join(notes)})" if notes else ""
             lines.append(
-                f"    {booking.kind}: {booking.detail} — {booking.confirmation_code}{price}"
+                f"    {booking.kind}: {booking.detail}{notes_text}"
+                f" — {booking.confirmation_code}{price}"
             )
         left = [task.text for task in trip.remaining if not task.done]
         lines.append(f"    remaining: {'; '.join(left) if left else '(nothing — trip is complete)'}")
@@ -327,7 +336,8 @@ async def record_booking(
 
     Call it immediately after `book_flight` / `book_hotel` returns, with the confirmation
     code that call gave you — never one you made up. `detail` is the line a person would
-    want to read back: airline, flight number and times, or hotel name and nights.
+    want to read back: airline, flight number and times, or hotel name and nights. For a
+    flight, pass the `fare`, `seat`, and `price_usd` that `book_flight` returned.
 
     `completes` names the checklist items this booking satisfies; they are ticked in the
     same commit as the booking, so the board never shows a trip with the flight booked and
@@ -351,6 +361,8 @@ async def record_booking(
         confirmation_code=request.confirmation_code,
         detail=request.detail,
         price_usd=request.price_usd,
+        fare=request.fare,
+        seat=request.seat,
     )
     # The booking and the tasks it closes land in ONE mutate(), so a consumer of the state
     # stream never observes a moment where they disagree.

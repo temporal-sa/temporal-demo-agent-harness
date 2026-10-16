@@ -189,14 +189,12 @@ async def test_subagent_runs_host_call_script(client_and_queue):
         "async def main():\n"
         '    resp = await search_flights({"origin": "SFO", "destination": "JFK", "date": "2026-07-01"})\n'
         '    cheapest = min(resp["flights"], key=lambda f: f["price_usd"])\n'
-        '    booking = await book_flight({"flight_id": cheapest["flight_id"], "passenger_name": "Ada Lovelace"})\n'
-        '    summary = await get_trip_summary({"booking_refs": [booking["confirmation_code"]]})\n'
-        '    return summary["summary"]\n'
+        '    return await book_flight({"flight_id": cheapest["flight_id"], "passenger_name": "Ada Lovelace"})\n'
         "asyncio.run(main())"
     )
     reply, _ = await _drive(client, task_queue, [script])
-    assert "Trip Itinerary" in reply
-    assert "Passenger: Ada Lovelace" in reply
+    assert "'passenger_name': 'Ada Lovelace'" in reply
+    assert "'fare': 'economy'" in reply
     assert "AIR-" in reply  # flight confirmation code prefix
 
 

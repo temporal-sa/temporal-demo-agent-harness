@@ -43,6 +43,14 @@
     return STATUS[row.stage];
   }
 
+  // Airline fare codes, as a boarding pass prints them: Y economy, W premium, J business.
+  const FARE_CODES: Record<string, string> = { economy: "Y", premium: "W", business: "J" };
+
+  function seatText(row: Row): string {
+    if (row.kind !== "flight" || (!row.fare && !row.seat)) return "";
+    return `${FARE_CODES[row.fare ?? "economy"] ?? "?"} ${row.seat ?? "--"}`;
+  }
+
   const trip = $derived(board?.trips.at(-1));
   const remaining = $derived((trip?.remaining ?? []).filter((task) => !task.done));
   const total = $derived(rows.reduce((sum, row) => sum + (row.stage === "confirmed" ? (row.price ?? 0) : 0), 0));
@@ -66,6 +74,7 @@
           <th scope="col">Flight</th>
           <th scope="col">Route</th>
           <th scope="col">Date</th>
+          <th scope="col">Seat</th>
           <th scope="col">Status</th>
           <th scope="col">Conf</th>
         </tr>
@@ -86,11 +95,14 @@
               <SplitFlap text={row.date.slice(5) || ""} width={5} {still} />
               {#if row.moreDates > 0}<span class="more mono" title="{row.moreDates} more dates searched">+{row.moreDates}</span>{/if}
             </td>
+            <td class="seat" title={row.fare ? `${row.fare}${row.seat ? `, seat ${row.seat}` : ""}` : ""}>
+              <SplitFlap text={seatText(row)} width={5} {still} />
+            </td>
             <td class="status {s.tone}" title={s.meaning}><SplitFlap text={s.text} width={10} {still} /></td>
             <td class="code"><SplitFlap text={row.code} width={10} {still} /></td>
           </tr>
           {#if row.kind === "hotel" && row.label && row.from}
-            <tr class="detail"><td></td><td colspan="4" class="muted">{row.label}</td></tr>
+            <tr class="detail"><td></td><td colspan="5" class="muted">{row.label}</td></tr>
           {/if}
         {/each}
       </tbody>
@@ -116,7 +128,7 @@
   .departures { display: flex; flex-direction: column; gap: .8rem; min-height: 0; overflow: auto; }
   .empty { margin: auto; display: grid; justify-items: center; gap: .8rem; text-align: center; font-size: 1.2rem; }
   .empty p { font-size: .8rem; max-width: 22rem; margin: 0; }
-  table { border-collapse: separate; border-spacing: 0 .35rem; font-size: .95rem; }
+  table { border-collapse: separate; border-spacing: 0 .35rem; font-size: .82rem; }
   th { text-align: left; font-weight: 500; padding: 0 .6rem .2rem 0; }
   td { padding: 0 .6rem 0 0; color: var(--yellow); vertical-align: middle; white-space: nowrap; }
   td.status.green { color: var(--green); }
@@ -124,7 +136,7 @@
   td.status.cyan { color: var(--cyan); }
   td.status.slate { color: var(--slate-300); }
   td.status.red { color: var(--red); }
-  td.code { color: var(--off-white); }
+  td.code, td.seat { color: var(--off-white); }
   .more { margin-left: .3rem; font-size: .75rem; color: var(--indigo-100); }
   tr.detail td { font-size: .75rem; padding-top: 0; }
   .summary { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; margin-top: auto; }

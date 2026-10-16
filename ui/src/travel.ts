@@ -18,6 +18,9 @@ export interface Row {
   moreDates: number;
   /** Flight number or hotel name, once known. */
   label: string;
+  /** A flight's fare level and seat, once chosen. */
+  fare: string | null;
+  seat: string | null;
   code: string;
   price: number | null;
 }
@@ -35,14 +38,22 @@ const AIRLINE_CODES: Record<string, string> = {
   "British Airways": "BA", "Air France": "AF", "Swiss": "LX", "Emirates": "EK",
 };
 
-function airlineCode(name: string): string {
-  return AIRLINE_CODES[name] ?? name.replace(/[^A-Za-z]/g, "").slice(0, 2).toUpperCase();
+/** The code for the airline named anywhere in a booking's detail ("Delta FL-... 13:30"). */
+function airlineCode(detail: string): string {
+  const known = Object.keys(AIRLINE_CODES)
+    .filter((name) => detail.includes(name))
+    .sort((a, b) => b.length - a.length)[0];
+  return known ? AIRLINE_CODES[known] : detail.replace(/[^A-Za-z]/g, "").slice(0, 2).toUpperCase();
 }
 
-/** `FL-SFOJFK-003` → `["SFO", "JFK", "003"]`, the shape Monty's simulated backend issues. */
-function parseFlightId(id: string): [string, string, string] | null {
-  const match = /^FL-([A-Z]{3})([A-Z]{3})-(\d+)$/.exec(id);
-  return match ? [match[1], match[2], match[3]] : null;
+/** `FL-SFOJFK-20261103-003` → origin, destination, date, and number, the shape Monty's
+ *  simulated backend issues. IDs from before dates were added, `FL-SFOJFK-003`, have no date. */
+const FLIGHT_ID = /FL-([A-Z]{3})([A-Z]{3})-(?:(\d{4})(\d{2})(\d{2})-)?(\d+)/;
+
+function parseFlightId(id: string): { from: string; to: string; date: string; number: string } | null {
+  const m = FLIGHT_ID.exec(id);
+  if (!m) return null;
+  return { from: m[1], to: m[2], date: m[3] ? `${m[3]}-${m[4]}-${m[5]}` : "", number: m[6] };
 }
 
 /** A host call's arguments arrive as `{request: {...}}`. */
@@ -88,6 +99,8 @@ export function departures(agents: readonly AgentView[], board: TripBoard | unde
       label: row.label || existing.label,
       code: row.code || existing.code,
       price: row.price ?? existing.price,
+      fare: row.fare ?? existing.fare,
+      seat: row.seat ?? existing.seat,
     });
   }
 
@@ -102,13 +115,15 @@ export function departures(agents: readonly AgentView[], board: TripBoard | unde
       upsert({
         key: `search:${route}`, kind: "flight", stage: stageOf(part, "search"),
         from: req.origin, to: req.destination, date: "", label: "", code: "", price: null,
+        fare: null, seat: null,
       });
     } else if (part.toolName === "book_flight" && req.flight_id) {
-      const parsed = parseFlightId(req.flight_id);
-      if (!parsed) continue;
+      const flight = parseFlightId(req.flight_id);
+      if (!flight) continue;
       upsert({
         key: `flight:${req.flight_id}`, kind: "flight", stage: stageOf(part, "book"),
-        from: parsed[0], to: parsed[1], date: "", label: `FL ${parsed[2]}`, code: "", price: null,
+        from: flight.from, to: flight.to, date: flight.date, label: `FL ${flight.number}`,
+        code: "", price: null, fare: req.fare ?? "economy", seat: req.seat ?? null,
       });
     } else if (part.toolName === "search_hotels" && req.city) {
       const prefix = req.city.slice(0, 3).toUpperCase();
@@ -116,28 +131,30 @@ export function departures(agents: readonly AgentView[], board: TripBoard | unde
       upsert({
         key: `hotel:${prefix}`, kind: "hotel", stage: stageOf(part, "search"),
         from: req.city, to: req.city, date: req.check_in ?? "", label: "", code: "", price: null,
+        fare: null, seat: null,
       });
     } else if (part.toolName === "book_hotel" && req.hotel_id) {
       const prefix = req.hotel_id.split("-")[1] ?? "";
       const city = hotelCities.get(prefix) ?? prefix;
       upsert({
         key: `hotel:${prefix}`, kind: "hotel", stage: stageOf(part, "book"),
-        from: city, to: city, date: "", label: "", code: "", price: null,
+        from: city, to: city, date: "", label: "", code: "", price: null, fare: null, seat: null,
       });
     }
   }
 
   // The trip board is the record: its bookings are confirmed whatever the tool calls say.
   for (const trip of board?.trips ?? []) {
-    for (const flight of trip.flights ?? []) {
-      const id = /FL-[A-Z]{6}-\d+/.exec(flight.detail)?.[0];
-      const parsed = id ? parseFlightId(id) : null;
-      const airline = flight.detail.replace(/FL-[A-Z]{6}-\d+/, "").trim();
+    for (const booked of trip.flights ?? []) {
+      const id = FLIGHT_ID.exec(booked.detail)?.[0];
+      const flight = id ? parseFlightId(id) : null;
       upsert({
-        key: id ? `flight:${id}` : `flight:${flight.confirmation_code}`,
-        kind: "flight", stage: "confirmed", from: parsed?.[0] ?? "", to: parsed?.[1] ?? "", date: "",
-        label: parsed ? `${airlineCode(airline)} ${parsed[2]}` : flight.detail,
-        code: flight.confirmation_code, price: flight.price_usd ?? null,
+        key: id ? `flight:${id}` : `flight:${booked.confirmation_code}`,
+        kind: "flight", stage: "confirmed", from: flight?.from ?? "", to: flight?.to ?? "",
+        date: flight?.date ?? "",
+        label: flight ? `${airlineCode(booked.detail)} ${flight.number}` : booked.detail,
+        code: booked.confirmation_code, price: booked.price_usd ?? null,
+        fare: booked.fare ?? null, seat: booked.seat ?? null,
       });
     }
     for (const hotel of trip.hotels ?? []) {
@@ -147,6 +164,7 @@ export function departures(agents: readonly AgentView[], board: TripBoard | unde
         key: known ? `hotel:${prefix}` : `hotel:${hotel.confirmation_code}`,
         kind: "hotel", stage: "confirmed", from: "", to: "", date: "",
         label: hotel.detail, code: hotel.confirmation_code, price: hotel.price_usd ?? null,
+        fare: null, seat: null,
       });
     }
   }

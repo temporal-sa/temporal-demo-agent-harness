@@ -84,9 +84,9 @@ async def test_script_calls_host_functions(client_and_queue):
     )
 
     # Concurrently search flights AND hotels (one gathered batch → two durable activities
-    # in flight at once), then book the cheapest flight, then summarize — exercising the
-    # async batch driver end-to-end: a multi-call concurrent batch followed by dependent
-    # sequential calls. Host functions are ASYNC and must be awaited.
+    # in flight at once), then fetch the cheapest flight's seat map and book a premium seat
+    # on it — exercising the async batch driver end-to-end: a multi-call concurrent batch
+    # followed by dependent sequential calls. Host functions are ASYNC and must be awaited.
     script = (
         "import asyncio\n"
         "async def main():\n"
@@ -95,10 +95,12 @@ async def test_script_calls_host_functions(client_and_queue):
         '        search_hotels({"city": "New York", "check_in": "2026-07-01", "check_out": "2026-07-05"}),\n'
         "    )\n"
         '    cheapest = min(flights["flights"], key=lambda f: f["price_usd"])\n'
-        '    flight = await book_flight({"flight_id": cheapest["flight_id"], "passenger_name": "Ada Lovelace"})\n'
+        '    seats = await get_seat_map({"flight_id": cheapest["flight_id"]})\n'
+        '    seat = [s for s in seats["open_seats"] if s["cabin"] == "premium"][0]\n'
+        '    flight = await book_flight({"flight_id": cheapest["flight_id"], "passenger_name": "Ada Lovelace",\n'
+        '                                "fare": "premium", "seat": seat["seat"]})\n'
         "    print(f\"airline={cheapest['airline']} hotels={len(hotels['hotels'])}\")\n"
-        '    summary = await get_trip_summary({"booking_refs": [flight["confirmation_code"]]})\n'
-        '    return summary["summary"]\n'
+        '    return flight\n'
         "asyncio.run(main())"
     )
     await handle.execute_update(
@@ -108,11 +110,40 @@ async def test_script_calls_host_functions(client_and_queue):
     )
 
     reply = await _reply_text(client, handle.id)
-    # The reply carries the printed airline line plus the itinerary (final expression).
+    # The reply carries the printed airline line plus the booking (final expression).
     assert "airline=" in reply
-    assert "Trip Itinerary" in reply
-    assert "Passenger: Ada Lovelace" in reply
+    assert "'fare': 'premium'" in reply
+    assert "'passenger_name': 'Ada Lovelace'" in reply
     assert "AIR-" in reply  # flight confirmation code prefix
+
+
+async def test_a_seat_outside_the_fares_cabin_is_refused(client_and_queue):
+    client, task_queue = client_and_queue
+    handle = await client.start_workflow(
+        MontyDynamicAgentWorkflow.run,
+        AgentConfig(),
+        id=f"MontyDynamicAgent-{uuid.uuid4()}",
+        task_queue=task_queue,
+    )
+    script = (
+        "import asyncio\n"
+        "async def main():\n"
+        '    found = await search_flights({"origin": "SFO", "destination": "JFK", "date": "2026-07-01"})\n'
+        '    flight_id = found["flights"][0]["flight_id"]\n'
+        '    seats = await get_seat_map({"flight_id": flight_id})\n'
+        '    business = [s for s in seats["open_seats"] if s["cabin"] == "business"][0]\n'
+        '    return await book_flight({"flight_id": flight_id, "passenger_name": "Ada Lovelace",\n'
+        '                              "fare": "economy", "seat": business["seat"]})\n'
+        "asyncio.run(main())"
+    )
+    await handle.execute_update(
+        SEND_AGENT_MESSAGE_UPDATE,
+        AgentMessage(type="run_script", payload={"script": script}),
+        result_type=AgentMessageReply,
+    )
+
+    reply = await _reply_text(client, handle.id)
+    assert "is in business, not economy" in reply
 
 
 async def test_script_syntax_error_is_reported(client_and_queue):

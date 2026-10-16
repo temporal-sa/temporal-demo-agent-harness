@@ -48,9 +48,20 @@ async def main():
     flights = [min(found["flights"], key=lambda f: f["price_usd"]) for found in flights_found]
     hotels = [min(found["hotels"], key=lambda h: h["price_per_night_usd"]) for found in hotels_found]
 
+    # Every leg's seat map at once, then an economy aisle seat on each.
+    seat_maps = await asyncio.gather(*[get_seat_map({"flight_id": f["flight_id"]}) for f in flights])
+    seats = [
+        [s for s in m["open_seats"] if s["cabin"] == "economy" and s["seat"][-1] in "CD"][0]["seat"]
+        for m in seat_maps
+    ]
+
     # Then every booking at once, flights and hotels each in their own gather.
     flights_booked, hotels_booked = await asyncio.gather(
-        asyncio.gather(*[book_flight({"flight_id": f["flight_id"], "passenger_name": "Ada Lovelace"}) for f in flights]),
+        asyncio.gather(*[
+            book_flight({"flight_id": f["flight_id"], "passenger_name": "Ada Lovelace",
+                         "fare": "economy", "seat": seat})
+            for f, seat in zip(flights, seats)
+        ]),
         asyncio.gather(*[book_hotel({"hotel_id": h["hotel_id"], "guest_name": "Ada Lovelace"}) for h in hotels]),
     )
 
@@ -58,7 +69,8 @@ async def main():
         await record_booking({"trip_id": trip_id, "kind": "flight",
                               "confirmation_code": booked["confirmation_code"],
                               "detail": flight["airline"] + " " + flight["flight_id"],
-                              "price_usd": flight["price_usd"], "completes": ["Book " + o + " to " + d]})
+                              "price_usd": booked["price_usd"], "fare": booked["fare"], "seat": booked["seat"],
+                              "completes": ["Book " + o + " to " + d]})
     for (city, _, _, nights), hotel, booked in zip(stays, hotels, hotels_booked):
         await record_booking({"trip_id": trip_id, "kind": "hotel",
                               "confirmation_code": booked["confirmation_code"],

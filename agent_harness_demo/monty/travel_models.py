@@ -9,6 +9,8 @@ and stringized annotations on nested models trip its TypeAdapter build. Concrete
 annotations, nested models defined before the responses that reference them.
 """
 
+from typing import Literal
+
 from pydantic import BaseModel
 
 
@@ -17,13 +19,24 @@ from pydantic import BaseModel
 # ---------------------------------------------------------------------------
 
 
+FareLevel = Literal["economy", "premium", "business"]
+
+
+class Fare(BaseModel):
+    level: FareLevel
+    price_usd: float
+    changeable: bool
+
+
 class Flight(BaseModel):
     flight_id: str
     airline: str
     departure_time: str
     arrival_time: str
     price_usd: float
+    """The economy fare, the lowest on the flight."""
     stops: int
+    fares: list[Fare]
 
 
 class FlightSearchRequest(BaseModel):
@@ -36,15 +49,39 @@ class FlightSearchResponse(BaseModel):
     flights: list[Flight]
 
 
+class Seat(BaseModel):
+    seat: str
+    """Row and letter, such as "14C"."""
+    cabin: FareLevel
+    extra_usd: float
+    """Added to the fare: economy exit rows cost extra."""
+
+
+class SeatMapRequest(BaseModel):
+    flight_id: str
+
+
+class SeatMapResponse(BaseModel):
+    flight_id: str
+    open_seats: list[Seat]
+
+
 class FlightBookingRequest(BaseModel):
     flight_id: str
     passenger_name: str
+    fare: FareLevel = "economy"
+    seat: str | None = None
+    """An open seat in the fare's cabin, from `get_seat_map`. None leaves it to the airline."""
 
 
 class FlightBookingResponse(BaseModel):
     confirmation_code: str
     flight_id: str
     passenger_name: str
+    fare: FareLevel
+    seat: str | None
+    price_usd: float
+    """The fare plus any seat charge."""
     status: str
 
 
@@ -81,16 +118,3 @@ class HotelBookingResponse(BaseModel):
     hotel_id: str
     guest_name: str
     status: str
-
-
-# ---------------------------------------------------------------------------
-# Trip summary
-# ---------------------------------------------------------------------------
-
-
-class TripSummaryRequest(BaseModel):
-    booking_refs: list[str]
-
-
-class TripSummaryResponse(BaseModel):
-    summary: str
