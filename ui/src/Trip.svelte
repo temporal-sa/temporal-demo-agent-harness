@@ -88,7 +88,8 @@
   });
 
   const rows = $derived(departures(Object.values(agent.agents), board));
-  // Choices waiting on the traveler, from Monty or any subagent, take the map's place.
+  // Choices waiting on the traveler, from Monty or any subagent, take over the chat column
+  // until they're answered; the chat comes back, scrolled to the newest, once they are.
   const choices = $derived(agent.pendingCallbacks.filter((c) => c.part.toolName === CHOICE_TOOL));
   const still = $derived(motion.paused || motion.reduced);
 
@@ -106,15 +107,7 @@
 
 <main class="workspace">
   <div class="travel">
-    {#if choices.length > 0}
-      <section class="card choosing" aria-label="Choose an option">
-        {#each choices as call (call.part.toolId)}
-          <ChoiceCards part={call.part} answer={(choice) => agent.provideToolOutput(call.part.toolId, choice)} />
-        {/each}
-      </section>
-    {:else}
-      <RouteMap {rows} {away} />
-    {/if}
+    <RouteMap {rows} {away} />
     <Departures {rows} {board} {away} {still} />
   </div>
 
@@ -137,7 +130,15 @@
       </div>
     {/if}
 
-    <Conversation {messages} />
+    {#if choices.length > 0}
+      <section class="card choosing" aria-label="Choose an option">
+        {#each choices as call (call.part.toolId)}
+          <ChoiceCards part={call.part} answer={(choice) => agent.provideToolOutput(call.part.toolId, choice)} />
+        {/each}
+      </section>
+    {:else}
+      <Conversation {messages} />
+    {/if}
 
     {#if agent.pendingApprovals.length > 0}
       <div class="approvals">
@@ -148,29 +149,31 @@
       </div>
     {/if}
 
-    <Settings
-      {model}
-      {policy}
-      setModel={(next) => void agent.sendMessage("set_model", { model: next })}
-      setPolicy={(next) => void agent.sendMessage("set_approval_policy", { new_policy: next })}
-    />
+    {#if choices.length === 0}
+      <Settings
+        {model}
+        {policy}
+        setModel={(next) => void agent.sendMessage("set_model", { model: next })}
+        setPolicy={(next) => void agent.sendMessage("set_approval_policy", { new_policy: next })}
+      />
 
-    <form class="composer" onsubmit={send}>
-      <label class="visually-hidden" for="composer">Message Monty</label>
-      <textarea
-        id="composer"
-        rows="2"
-        placeholder="Where are you going?"
-        bind:value={draft}
-        onkeydown={(event) => {
-          if (event.key === "Enter" && !event.shiftKey) {
-            event.preventDefault();
-            event.currentTarget.form?.requestSubmit();
-          }
-        }}
-      ></textarea>
-      <button class="button primary ultraviolet" type="submit" disabled={!draft.trim()}>Send</button>
-    </form>
+      <form class="composer" onsubmit={send}>
+        <label class="visually-hidden" for="composer">Message Monty</label>
+        <textarea
+          id="composer"
+          rows="2"
+          placeholder="Where are you going?"
+          bind:value={draft}
+          onkeydown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              event.currentTarget.form?.requestSubmit();
+            }
+          }}
+        ></textarea>
+        <button class="button primary ultraviolet" type="submit" disabled={!draft.trim()}>Send</button>
+      </form>
+    {/if}
   </div>
 </main>
 
@@ -182,10 +185,10 @@
   .travel { display: grid; grid-template-rows: minmax(12rem, 1fr) minmax(14rem, 1.15fr); gap: 1rem; min-height: 0; }
   .side { display: flex; flex-direction: column; gap: .8rem; min-height: 0; }
   .side > * { flex-shrink: 0; }
-  .side > :global(.conversation) { flex: 1 1 0; min-height: 8rem; }
+  .side > :global(.conversation), .side > .choosing { flex: 1 1 0; min-height: 8rem; }
   /* However many calls wait at once, the conversation keeps its share of the column. */
   .approvals { max-height: 55%; overflow: auto; flex-shrink: 1; min-height: 0; }
-  .choosing { overflow: auto; min-height: 0; display: grid; gap: 1rem; align-content: start; border-color: var(--yellow); }
+  .choosing { overflow: auto; display: grid; gap: 1.5rem; align-content: start; border-color: var(--yellow); }
   .recovering { border-color: var(--yellow); display: grid; gap: .5rem; }
   .failure { border-color: var(--red); display: grid; gap: .5rem; justify-items: start; }
   .recovering p, .failure p { margin: 0; }

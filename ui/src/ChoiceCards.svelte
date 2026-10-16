@@ -33,17 +33,19 @@
     {#each request.options as option (option.option_id)}
       {@const chosen = sending?.option_id === option.option_id}
       <article class="card option" class:chosen class:dimmed={sending && !chosen}>
-        <h4>{option.title}</h4>
-        {#if option.note}<p class="muted note">{option.note}</p>{/if}
-        <ul class="legs">
-          {#each option.legs as leg (leg.flight_id)}
-            <li>
-              <span class="route mono">{leg.origin} → {leg.destination}</span>
-              <span class="when">{day(leg.date)} · {leg.departure_time}–{leg.arrival_time}</span>
-              <span class="muted">{leg.airline} · {stops(leg.stops)}</span>
-            </li>
-          {/each}
-        </ul>
+        <div class="about">
+          <h4>{option.title}</h4>
+          {#if option.note}<p class="muted note">{option.note}</p>{/if}
+          <ul class="legs">
+            {#each option.legs as leg (leg.flight_id)}
+              <li>
+                <span class="route mono">{leg.origin} → {leg.destination}</span>
+                <span class="when">{day(leg.date)} · {leg.departure_time}–{leg.arrival_time}</span>
+                <span class="muted">{leg.airline} · {stops(leg.stops)}</span>
+              </li>
+            {/each}
+          </ul>
+        </div>
         <div class="fares" role="group" aria-label="Fares for {option.title}">
           {#each option.fares as fare (fare.level)}
             {@const thisOne = chosen && sending?.fare === fare.level}
@@ -85,20 +87,31 @@
 </section>
 
 <style>
-  .choice { display: grid; gap: .6rem; min-width: 0; }
+  .choice { display: grid; gap: .6rem; min-width: 0; container-type: inline-size; }
   header { display: flex; align-items: center; gap: .7rem; }
-  .options { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr)); gap: .8rem; }
-  .option { display: grid; gap: .5rem; align-content: start; transition: opacity .2s, border-color .2s; }
+  /* One option per row: what the trip is on the left, its fares stacked on the right. */
+  .options { display: grid; gap: .7rem; }
+  .option {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(9rem, auto); gap: .6rem 1.2rem;
+    align-items: center; transition: opacity .2s, border-color .2s;
+  }
   .option.chosen { border-color: var(--green); }
   .option.dimmed { opacity: .55; }
+  .about { display: grid; gap: .45rem; min-width: 0; }
   h4 { margin: 0; font-weight: 500; font-size: .95rem; color: var(--off-white); }
   .note { margin: 0; }
   .legs { list-style: none; margin: 0; padding: 0; display: grid; gap: .45rem; }
   .legs li { display: grid; gap: .1rem; font-size: .82rem; }
   .route { color: var(--indigo-100); font-size: .85rem; }
-  .fares { display: grid; grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr)); gap: .35rem; min-width: 0; }
+  .fares { display: grid; gap: .35rem; min-width: 0; }
+  /* Too narrow for two columns: the fares sit under the legs, side by side. */
+  @container (max-width: 26rem) {
+    .option { grid-template-columns: minmax(0, 1fr); }
+    .fares { grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr)); }
+  }
   .fare {
-    display: grid; gap: .1rem; padding: .45rem .5rem; cursor: pointer; text-align: left;
+    display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: .1rem .8rem;
+    padding: .45rem .6rem; cursor: pointer; text-align: left;
     background: var(--space-black); color: var(--off-white); border: 1px solid var(--uv-light);
     font: inherit;
   }

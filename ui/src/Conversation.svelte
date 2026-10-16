@@ -179,7 +179,7 @@
                 {#if call.state === "awaiting_callback"}
                   <span class="badge progress">your choice</span>
                   <span>{choiceRequest(call).question}</span>
-                  <span class="muted">· pick an option on the left</span>
+                  <span class="muted">· waiting on your pick</span>
                 {:else if call.state === "done"}
                   <span class="badge good">chosen</span>
                   <span>{choiceSummary(call)}</span>
