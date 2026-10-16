@@ -64,7 +64,13 @@ with workflow.unsafe.imports_passed_through():
     )
     from temporal_agent_harness.harness.agent_workflow import AgentWorkflowRunner
 
-    from .conversational_workflow import CONCURRENCY_GUIDANCE, SUPPORTED_MODELS, SetModel
+    from .conversational_workflow import (
+        CONCURRENCY_GUIDANCE,
+        SUPPORTED_MODELS,
+        SetModel,
+        system_instruction,
+    )
+    from .models import TravelerContext
     from .workflow import MontyDynamicAgentWorkflow
 
 
@@ -106,7 +112,8 @@ options, prices, confirmations. You may run more scripts in follow-up turns.
 @agent.defn(name="MontyChatSubagentAgent")
 class MontyChatSubagentWorkflow:
     @agent.init
-    def __init__(self, config: AgentConfig) -> None:
+    def __init__(self, config: AgentConfig, data: TravelerContext | None = None) -> None:
+        self._instruction = system_instruction(SYSTEM_INSTRUCTION, data)
         self._runner = AgentWorkflowRunner(
             config,
             stream=WorkflowStream(),
@@ -174,7 +181,7 @@ class MontyChatSubagentWorkflow:
             stream = await gemini.interactions.create(
                 model=self._model,
                 input=self._conversation.steps,
-                system_instruction=SYSTEM_INSTRUCTION,
+                system_instruction=self._instruction,
                 tools=tools,
                 stream=True,
             )

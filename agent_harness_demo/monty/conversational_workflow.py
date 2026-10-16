@@ -50,6 +50,7 @@ with workflow.unsafe.imports_passed_through():
     from temporal_agent_harness.harness.agent_workflow import AgentWorkflowRunner
 
     from . import activities, trip_board
+    from .models import TravelerContext
 
 
 SUPPORTED_MODELS = ("gemini-3.8-flash", "gemini-3.1-flash-lite")
@@ -86,7 +87,21 @@ anything runs:
       asyncio.gather(search_hotels({...})),
   )
   outbound, inbound, stay = flights[0], flights[1], hotels[0]
+  To compare many dates or airports, build the calls in the loop and gather them once; never \
+`await` inside the loop:
+  calls = [search_flights({...}) for day in days]
+  found = await asyncio.gather(*calls)
+  `asyncio.gather` takes no keyword arguments here, so there is no `return_exceptions`; gather \
+the calls plainly rather than wrapping each one in try/except.
   Book independent choices the same way, once the traveler has picked them."""
+
+
+def system_instruction(base: str, context: TravelerContext | None) -> str:
+    """The prompt for one session: the shared instructions, then the traveler's date.
+
+    Without context, today's date comes from the Workflow clock, which replays identically."""
+    context = context or TravelerContext(today=workflow.now().date())
+    return f"{base}\n\n{context.prompt_line()}"
 
 SYSTEM_INSTRUCTION = f"""\
 You are a friendly travel-booking assistant. You help users search and book flights and \
@@ -129,7 +144,8 @@ class MontyChatAgentWorkflow:
     trip_board = agent.state(trip_board.TripBoard)
 
     @agent.init
-    def __init__(self, config: AgentConfig) -> None:
+    def __init__(self, config: AgentConfig, data: TravelerContext | None = None) -> None:
+        self._instruction = system_instruction(SYSTEM_INSTRUCTION, data)
         self._runner = AgentWorkflowRunner(
             config,
             stream=WorkflowStream(),
@@ -220,7 +236,7 @@ class MontyChatAgentWorkflow:
             stream = await gemini.interactions.create(
                 model=self._model,
                 input=self._conversation.steps,
-                system_instruction=SYSTEM_INSTRUCTION,
+                system_instruction=self._instruction,
                 tools=tools,
                 stream=True,
             )

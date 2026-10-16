@@ -34,6 +34,23 @@ export interface TextReply {
   text: string;
 }
 /**
+ * Where the traveler is in time, sent once when a conversation starts.
+ *
+ * A model only knows the date it was trained up to, so without this it plans trips in the
+ * past. The demo view sends the traveler's own date and time zone; a session started
+ * without it falls back to the Workflow's clock, in UTC.
+ */
+export interface TravelerContext {
+  /**
+   * The traveler's local date when the conversation started.
+   */
+  today: string;
+  /**
+   * The traveler's IANA time zone, such as America/New_York.
+   */
+  timezone?: string | null;
+}
+/**
  * One trip the agent is collecting.
  */
 export interface Trip {
@@ -62,7 +79,7 @@ export interface TripTask {
 /** The `MontyChatAgent` agent's init data, handlers (message in, reply out) and observable
  *  state. */
 export interface MontyChatAgent {
-  initData: null;
+  initData: { data: TravelerContext; required: false };
   handlers: {
     /**
      * Chat with the travel assistant. Describe the trip you want (flights, hotels,

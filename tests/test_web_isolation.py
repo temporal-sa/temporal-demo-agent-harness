@@ -143,3 +143,14 @@ async def test_the_console_reaches_the_same_scoped_api(api):
         assert (await bob.get(f"/console/api/status/{session_id}")).status_code == 404
         page = await alice.get("/console/")
         assert page.status_code == 200 and "demo-view-link" in page.text
+
+
+async def test_a_session_starts_with_the_travelers_date_or_is_refused(api):
+    as_user = api(f"agent-harness-{uuid.uuid4().hex[:8]}")
+    async with as_user("alice") as alice:
+        good = {"today": "2026-12-01", "timezone": "Europe/Zurich"}
+        started = await alice.post("/api/sessions", json={"agent_workflow_type": CHAT_AGENT, "data": good})
+        assert started.status_code == 200
+        bad = {"today": "December 1st"}
+        refused = await alice.post("/api/sessions", json={"agent_workflow_type": CHAT_AGENT, "data": bad})
+        assert refused.status_code == 422
