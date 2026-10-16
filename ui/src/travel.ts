@@ -152,13 +152,19 @@ export function departures(agents: readonly AgentView[], board: TripBoard | unde
   }
   // A route's search row gives way to its bookings, which take its date when only one was
   // searched. Otherwise it shows the first date searched and how many more.
-  const booked = new Set<string>();
-  for (const row of rows.values()) if (row.key.startsWith("flight:")) booked.add(`${row.from}-${row.to}`);
+  // Once a flight is booked, the searches it settled go too: any searched route that shares
+  // its origin or destination (ATL→GVA once ATL→ZRH is booked), and every unbooked search
+  // once the trip itself is booked.
+  const bookings = [...rows.values()].filter((r) => r.key.startsWith("flight:") && r.stage !== "declined");
+  const tripBooked = (board?.trips ?? []).some((trip) => trip.status === "booked");
+  const settled = (row: Row) =>
+    tripBooked ||
+    bookings.some((b) => b.from === row.from || b.to === row.to);
   for (const [key, row] of rows) {
     const route = `${row.from}-${row.to}`;
     const dates = [...(searchedDates.get(route) ?? [])].sort();
     if (key.startsWith("search:")) {
-      if (booked.has(route)) rows.delete(key);
+      if (settled(row) && !isMoving(row.stage) && row.stage !== "clearance") rows.delete(key);
       else rows.set(key, { ...row, date: dates[0] ?? "", moreDates: Math.max(dates.length - 1, 0) });
     } else if (key.startsWith("flight:") && !row.date && dates.length === 1) {
       rows.set(key, { ...row, date: dates[0] });
@@ -167,7 +173,9 @@ export function departures(agents: readonly AgentView[], board: TripBoard | unde
 
   // By date, like a real board; a flight sorts ahead of the stay that starts the same day.
   return [...rows.values()].sort(
-    (a, b) => (a.date || "9999").localeCompare(b.date || "9999") || (a.kind === "flight" ? -1 : 1),
+    (a, b) =>
+      (a.date || "9999").localeCompare(b.date || "9999") ||
+      (a.kind === b.kind ? 0 : a.kind === "flight" ? -1 : 1),
   );
 }
 

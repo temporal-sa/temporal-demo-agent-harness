@@ -25,7 +25,9 @@
   // an airport board. Cells that don't change stay put.
   $effect(() => {
     const next = target.split("");
-    const current = untrack(() => shown);
+    // A copy, read untracked: reading `shown[i]` from the live state would make every flip
+    // re-run this effect and cancel the flips still to come, so the board never settles.
+    const current = untrack(() => [...shown]);
     if (still || current.length === 0) {
       shown = next;
       return;

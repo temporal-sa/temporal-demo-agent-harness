@@ -43,10 +43,6 @@
 <style>
   .settings { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: end; }
   label { display: grid; gap: .25rem; }
-  select {
-    font: 500 .8rem var(--font-mono); color: var(--off-white); background: var(--space-black);
-    border: 1px solid var(--border); padding: .35rem .5rem;
-  }
-  select:focus-visible { outline: none; border-color: var(--green); box-shadow: 0 0 0 2px var(--green-soft); }
+  /* select styles live in app.css, which can style the open list */
   p { margin: 0; flex: 1 1 14rem; }
 </style>

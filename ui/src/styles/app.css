@@ -28,3 +28,33 @@ a:focus-visible, summary:focus-visible { outline: 2px solid var(--green); outlin
 @media (max-width: 900px) {
   .app { height: auto; min-height: 100dvh; }
 }
+
+/* Themed dropdowns. Browsers with customizable select (Chrome 135+) draw the open list with
+   these styles too; others keep their native list and theme only the closed box. */
+.settings select,
+.settings select::picker(select) {
+  appearance: base-select;
+}
+.settings select {
+  display: flex; align-items: center; gap: .6rem; min-width: 12rem; cursor: pointer;
+  font: 500 .8rem var(--font-mono); color: var(--off-white);
+  background: var(--space-black); border: 1px solid var(--uv-light); border-radius: 0;
+  padding: .4rem .6rem;
+}
+.settings select:hover { border-color: var(--indigo-200); }
+.settings select:focus-visible { outline: none; border-color: var(--green); box-shadow: 0 0 0 2px var(--green-soft); }
+.settings select::picker-icon { color: var(--indigo-200); transition: rotate .15s; }
+.settings select:open::picker-icon { rotate: 180deg; }
+.settings select::picker(select) {
+  margin-top: 4px; padding: .25rem; border: 1px solid var(--uv-light); border-radius: 0;
+  background: #141414; box-shadow: 0 12px 32px rgba(0, 0, 0, .55);
+}
+.settings option {
+  display: flex; align-items: center; gap: .5rem; padding: .45rem .6rem;
+  font: 500 .8rem var(--font-mono); color: var(--off-white); background: transparent;
+}
+.settings option:hover,
+.settings option:focus-visible { background: rgba(68, 76, 231, .35); outline: none; }
+.settings option:checked { color: var(--green); }
+.settings option::checkmark { color: var(--green); }
+.settings option:disabled { color: var(--slate-300); }
