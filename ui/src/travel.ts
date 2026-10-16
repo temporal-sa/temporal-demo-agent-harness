@@ -62,6 +62,13 @@ function request(part: ToolPart): Record<string, string> {
   return ((input.request ?? input) as Record<string, string>) ?? {};
 }
 
+/** The confirmation code in a finished booking call's output, which prints the response
+ *  Python-style (`confirmation_code='AIR-…'`) or as JSON. */
+function confirmationCode(part: ToolPart): string {
+  if (part.state !== "done" || !part.output) return "";
+  return /confirmation_code['"]?\s*[:=]\s*['"]([^'"]+)['"]/.exec(part.output)?.[1] ?? "";
+}
+
 function stageOf(part: ToolPart, kind: "search" | "book"): Stage {
   switch (part.state) {
     case "awaiting_approval":
@@ -123,7 +130,7 @@ export function departures(agents: readonly AgentView[], board: TripBoard | unde
       upsert({
         key: `flight:${req.flight_id}`, kind: "flight", stage: stageOf(part, "book"),
         from: flight.from, to: flight.to, date: flight.date, label: `FL ${flight.number}`,
-        code: "", price: null, fare: req.fare ?? "economy", seat: null,
+        code: confirmationCode(part), price: null, fare: req.fare ?? "economy", seat: null,
       });
     } else if (part.toolName === "select_seat" && req.flight_id && part.state === "done") {
       // A seat chosen after booking lands on the flight's row once the airline confirms it.
@@ -142,21 +149,28 @@ export function departures(agents: readonly AgentView[], board: TripBoard | unde
       const city = hotelCities.get(prefix) ?? prefix;
       upsert({
         key: `hotel:${prefix}`, kind: "hotel", stage: stageOf(part, "book"),
-        from: city, to: city, date: "", label: "", code: "", price: null, fare: null, seat: null,
+        from: city, to: city, date: "", label: "", code: confirmationCode(part), price: null,
+        fare: null, seat: null,
       });
     }
   }
+
+  // A board record finds the row its booking call made by confirmation code, which every
+  // record carries, rather than by the ID Monty may or may not have written into its detail.
+  const byCode = (code: string) => [...rows.values()].find((row) => row.code && row.code === code);
 
   // The trip board is the record: its bookings are confirmed whatever the tool calls say.
   for (const trip of board?.trips ?? []) {
     for (const booked of trip.flights ?? []) {
       const id = FLIGHT_ID.exec(booked.detail)?.[0];
       const flight = id ? parseFlightId(id) : null;
+      const made = byCode(booked.confirmation_code);
+      const number = flight?.number ?? made?.label.split(" ")[1];
       upsert({
-        key: id ? `flight:${id}` : `flight:${booked.confirmation_code}`,
+        key: made?.key ?? (id ? `flight:${id}` : `flight:${booked.confirmation_code}`),
         kind: "flight", stage: "confirmed", from: flight?.from ?? "", to: flight?.to ?? "",
         date: flight?.date ?? "",
-        label: flight ? `${airlineCode(booked.detail)} ${flight.number}` : booked.detail,
+        label: number ? `${airlineCode(booked.detail)} ${number}` : booked.detail,
         code: booked.confirmation_code, price: booked.price_usd ?? null,
         fare: booked.fare ?? null, seat: booked.seat ?? null,
       });
@@ -165,7 +179,7 @@ export function departures(agents: readonly AgentView[], board: TripBoard | unde
       const prefix = /HT-([A-Z]{3})-\d+/.exec(hotel.detail)?.[1];
       const known = prefix && rows.has(`hotel:${prefix}`);
       upsert({
-        key: known ? `hotel:${prefix}` : `hotel:${hotel.confirmation_code}`,
+        key: byCode(hotel.confirmation_code)?.key ?? (known ? `hotel:${prefix}` : `hotel:${hotel.confirmation_code}`),
         kind: "hotel", stage: "confirmed", from: "", to: "", date: "",
         label: hotel.detail, code: hotel.confirmation_code, price: hotel.price_usd ?? null,
         fare: null, seat: null,
