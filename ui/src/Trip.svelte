@@ -3,6 +3,7 @@
   import type { MontyChatAgent, TripBoard as Board } from "./generated/MontyChatAgent.ts";
   import ApprovalQueue from "./ApprovalQueue.svelte";
   import ChoiceCards from "./ChoiceCards.svelte";
+  import { CHOICE_TOOL } from "./choices.ts";
   import Conversation from "./Conversation.svelte";
   import { MODELS, type Model, type Policy } from "./format.ts";
   import Settings from "./Settings.svelte";
@@ -87,6 +88,8 @@
   });
 
   const rows = $derived(departures(Object.values(agent.agents), board));
+  // Choices waiting on the traveler, from Monty or any subagent, take the map's place.
+  const choices = $derived(agent.pendingCallbacks.filter((c) => c.part.toolName === CHOICE_TOOL));
   const still = $derived(motion.paused || motion.reduced);
 
   let draft = $state("");
@@ -103,7 +106,15 @@
 
 <main class="workspace">
   <div class="travel">
-    <RouteMap {rows} {away} />
+    {#if choices.length > 0}
+      <section class="card choosing" aria-label="Choose an option">
+        {#each choices as call (call.part.toolId)}
+          <ChoiceCards part={call.part} answer={(choice) => agent.provideToolOutput(call.part.toolId, choice)} />
+        {/each}
+      </section>
+    {:else}
+      <RouteMap {rows} {away} />
+    {/if}
     <Departures {rows} {board} {away} {still} />
   </div>
 
@@ -126,14 +137,7 @@
       </div>
     {/if}
 
-    <Conversation {messages} answerChoice={(toolId, choice) => agent.provideToolOutput(toolId, choice)} />
-
-    <!-- A subagent's choices aren't in the conversation above, so they wait here. -->
-    {#each agent.pendingCallbacks.filter((c) => c.agentId !== agent.rootAgentId && c.part.toolName === "ask_traveler_to_choose") as call (call.part.toolId)}
-      <div class="card subagent-choice">
-        <ChoiceCards part={call.part} answer={(choice) => agent.provideToolOutput(call.part.toolId, choice)} />
-      </div>
-    {/each}
+    <Conversation {messages} />
 
     {#if agent.pendingApprovals.length > 0}
       <div class="approvals">
@@ -181,7 +185,7 @@
   .side > :global(.conversation) { flex: 1 1 0; min-height: 8rem; }
   /* However many calls wait at once, the conversation keeps its share of the column. */
   .approvals { max-height: 55%; overflow: auto; flex-shrink: 1; min-height: 0; }
-  .subagent-choice { max-height: 55%; overflow: auto; flex-shrink: 1; min-height: 0; }
+  .choosing { overflow: auto; min-height: 0; display: grid; gap: 1rem; align-content: start; border-color: var(--yellow); }
   .recovering { border-color: var(--yellow); display: grid; gap: .5rem; }
   .failure { border-color: var(--red); display: grid; gap: .5rem; justify-items: start; }
   .recovering p, .failure p { margin: 0; }

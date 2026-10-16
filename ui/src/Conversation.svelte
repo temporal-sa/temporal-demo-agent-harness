@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { HarnessMessage, MessagePart, ToolPart } from "@temporalio/agent-harness-client";
   import { policyLabel, toolBadge, toolLabel } from "./format.ts";
-  import ChoiceCards, { type Choice } from "./ChoiceCards.svelte";
+  import { CHOICE_TOOL, choiceRequest, choiceSummary } from "./choices.ts";
   import Code from "./Code.svelte";
   import Markdown from "./Markdown.svelte";
   import type { MontyChatAgent } from "./generated/MontyChatAgent.ts";
@@ -15,16 +15,7 @@
     /** Several calls of one tool in a row, as a gathered script makes them. */
     | { kind: "tools"; name: string; parts: ToolPart[] };
 
-  let {
-    messages,
-    answerChoice,
-  }: {
-    messages: readonly Message[];
-    /** Answers a choice-card callback with the traveler's pick. */
-    answerChoice: (toolId: string, choice: Choice) => Promise<unknown>;
-  } = $props();
-
-  const CHOICE_TOOL = "ask_traveler_to_choose";
+  let { messages }: { messages: readonly Message[] } = $props();
 
   let scroller: HTMLElement | undefined = $state();
   // Follow the newest content until the reader scrolls up to read; scrolling back to the
@@ -184,7 +175,20 @@
               </div>
             {:else if segment.part.type === "tool" && segment.part.toolName === CHOICE_TOOL}
               {@const call = segment.part}
-              <ChoiceCards part={call} answer={(choice) => answerChoice(call.toolId, choice)} />
+              <div class="activity">
+                {#if call.state === "awaiting_callback"}
+                  <span class="badge progress">your choice</span>
+                  <span>{choiceRequest(call).question}</span>
+                  <span class="muted">· pick an option on the left</span>
+                {:else if call.state === "done"}
+                  <span class="badge good">chosen</span>
+                  <span>{choiceSummary(call)}</span>
+                {:else}
+                  {@const badge = toolBadge(call.state)}
+                  <span class="badge {badge.tone}">{badge.label}</span>
+                  <span>{choiceRequest(call).question}</span>
+                {/if}
+              </div>
             {:else if segment.part.type === "tool"}
               {@const tool = segment.part}
               {@const badge = toolBadge(tool.state)}

@@ -1,51 +1,13 @@
 <script lang="ts">
   import type { ToolPart } from "@temporalio/agent-harness-client";
+  import { FARE_LABEL, choiceRequest, type Choice } from "./choices.ts";
   import { usd } from "./format.ts";
-
-  type Fare = "economy" | "premium" | "business";
-  interface Leg {
-    flight_id: string;
-    origin: string;
-    destination: string;
-    date: string;
-    airline: string;
-    departure_time: string;
-    arrival_time: string;
-    stops: number;
-  }
-  interface Option {
-    option_id: string;
-    title: string;
-    legs: Leg[];
-    fares: { level: Fare; total_usd: number }[];
-    note?: string | null;
-  }
-  export interface Choice {
-    option_id: string | null;
-    fare: Fare | null;
-    comment: string | null;
-  }
 
   let { part, answer }: { part: ToolPart; answer: (choice: Choice) => Promise<unknown> } = $props();
 
-  const request = $derived(
-    ((part.input as { request?: { question: string; options: Option[] } }).request ?? {
-      question: "",
-      options: [],
-    }) as { question: string; options: Option[] },
-  );
-  const waiting = $derived(part.state === "awaiting_callback");
-
-  // Once answered, the choice comes back on the tool's output, as Python prints the model.
-  const answered = $derived.by((): Choice | null => {
-    if (!part.output) return null;
-    const field = (name: string) => new RegExp(`${name}='([^']*)'`).exec(part.output ?? "")?.[1] ?? null;
-    return { option_id: field("option_id"), fare: field("fare") as Fare | null, comment: field("comment") };
-  });
-
+  const request = $derived(choiceRequest(part));
   let sending = $state<Choice | null>(null);
   let comment = $state("");
-  const picked = $derived(sending ?? answered);
 
   async function choose(choice: Choice) {
     sending = choice;
@@ -59,19 +21,18 @@
   const DAY = new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
   const day = (date: string) => (/^\d{4}-\d{2}-\d{2}$/.test(date) ? DAY.format(new Date(`${date}T00:00:00Z`)) : date);
   const stops = (n: number) => (n === 0 ? "non-stop" : n === 1 ? "1 stop" : `${n} stops`);
-  const FARE_LABEL: Record<Fare, string> = { economy: "Economy", premium: "Premium", business: "Business" };
 </script>
 
 <section class="choice" aria-label={request.question}>
   <header>
-    <span class="badge {waiting ? 'progress' : 'good'}">{waiting ? "your choice" : "chosen"}</span>
+    <span class="badge progress">your choice</span>
     <h3 class="heading">{request.question}</h3>
   </header>
 
   <div class="options">
     {#each request.options as option (option.option_id)}
-      {@const chosen = picked?.option_id === option.option_id}
-      <article class="card option" class:chosen class:dimmed={picked && !chosen}>
+      {@const chosen = sending?.option_id === option.option_id}
+      <article class="card option" class:chosen class:dimmed={sending && !chosen}>
         <h4>{option.title}</h4>
         {#if option.note}<p class="muted note">{option.note}</p>{/if}
         <ul class="legs">
@@ -85,11 +46,11 @@
         </ul>
         <div class="fares" role="group" aria-label="Fares for {option.title}">
           {#each option.fares as fare (fare.level)}
-            {@const thisOne = chosen && picked?.fare === fare.level}
+            {@const thisOne = chosen && sending?.fare === fare.level}
             <button
               class="fare"
               class:picked={thisOne}
-              disabled={!waiting || sending !== null}
+              disabled={sending !== null}
               aria-pressed={thisOne}
               onclick={() => choose({ option_id: option.option_id, fare: fare.level, comment: null })}
             >
@@ -102,7 +63,7 @@
     {/each}
   </div>
 
-  {#if waiting && !sending}
+  {#if !sending}
     <form
       class="other"
       onsubmit={(event) => {
@@ -118,15 +79,15 @@
       Monty's Workflow is waiting on your pick, durably: it holds until you choose, even across a
       worker restart.
     </p>
-  {:else if picked && picked.option_id === null}
-    <p class="muted">You asked for something else{picked.comment ? `: “${picked.comment}”` : "."}</p>
+  {:else}
+    <p class="muted">Sending your pick to Monty…</p>
   {/if}
 </section>
 
 <style>
   .choice { display: grid; gap: .6rem; min-width: 0; }
   header { display: flex; align-items: center; gap: .7rem; }
-  .options { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(15rem, 100%), 1fr)); gap: .6rem; }
+  .options { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr)); gap: .8rem; }
   .option { display: grid; gap: .5rem; align-content: start; transition: opacity .2s, border-color .2s; }
   .option.chosen { border-color: var(--green); }
   .option.dimmed { opacity: .55; }
