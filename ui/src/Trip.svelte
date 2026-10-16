@@ -2,6 +2,7 @@
   import { AgentSession } from "@temporalio/agent-harness-svelte";
   import type { MontyChatAgent, TripBoard as Board } from "./generated/MontyChatAgent.ts";
   import ApprovalQueue from "./ApprovalQueue.svelte";
+  import ChoiceCards from "./ChoiceCards.svelte";
   import Conversation from "./Conversation.svelte";
   import { MODELS, type Model, type Policy } from "./format.ts";
   import Settings from "./Settings.svelte";
@@ -125,7 +126,14 @@
       </div>
     {/if}
 
-    <Conversation {messages} />
+    <Conversation {messages} answerChoice={(toolId, choice) => agent.provideToolOutput(toolId, choice)} />
+
+    <!-- A subagent's choices aren't in the conversation above, so they wait here. -->
+    {#each agent.pendingCallbacks.filter((c) => c.agentId !== agent.rootAgentId && c.part.toolName === "ask_traveler_to_choose") as call (call.part.toolId)}
+      <div class="card subagent-choice">
+        <ChoiceCards part={call.part} answer={(choice) => agent.provideToolOutput(call.part.toolId, choice)} />
+      </div>
+    {/each}
 
     {#if agent.pendingApprovals.length > 0}
       <div class="approvals">
@@ -173,6 +181,7 @@
   .side > :global(.conversation) { flex: 1 1 0; min-height: 8rem; }
   /* However many calls wait at once, the conversation keeps its share of the column. */
   .approvals { max-height: 55%; overflow: auto; flex-shrink: 1; min-height: 0; }
+  .subagent-choice { max-height: 55%; overflow: auto; flex-shrink: 1; min-height: 0; }
   .recovering { border-color: var(--yellow); display: grid; gap: .5rem; }
   .failure { border-color: var(--red); display: grid; gap: .5rem; justify-items: start; }
   .recovering p, .failure p { margin: 0; }

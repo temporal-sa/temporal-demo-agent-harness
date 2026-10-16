@@ -1,6 +1,6 @@
 # Agent Harness: Monty the travel agent
 
-Monty is a conversational travel agent built on the [Temporal Agent Harness](https://github.com/temporal-community/temporal-agent-harness). You ask for a trip, and the model writes a short Python script that runs in a [pydantic-monty](https://pypi.org/project/pydantic-monty/) sandbox. Each flight or hotel search, seat map, and booking in that script is a durable Temporal Activity, and each tool call waits for your approval. Flights come in economy, premium, and business fares, and Monty offers seats from the flight's seat map before it books. The trip board shows what's booked and what's left, and it updates as the bookings land.
+Monty is a conversational travel agent built on the [Temporal Agent Harness](https://github.com/temporal-community/temporal-agent-harness). You ask for a trip, and the model writes a short Python script that runs in a [pydantic-monty](https://pypi.org/project/pydantic-monty/) sandbox. Each flight or hotel search, seat map, and booking in that script is a durable Temporal Activity, and each tool call waits for your approval. Flights come in economy, premium, and business fares. When Monty has options to offer, it shows them as cards in your browser and waits for you to pick one: that question is a harness callback tool, answered by the page rather than a worker, and the Workflow holds it durably until you choose. After booking, Monty offers seats from the flight's seat map, with each seat's perks and drawbacks. The trip board shows what's booked and what's left, and it updates as the bookings land.
 
 Because the conversation is a Workflow, you can kill the worker in the middle of a booking. When a worker comes back, the agent carries on from the same step, with the same approvals and the same trip board.
 
@@ -15,7 +15,7 @@ The app has two views of the same sessions, and each links to the other with the
 
 1. Open the app. It starts a trip, or resumes your most recent one.
 2. Ask: *"Book me a flight from SFO to JFK on November 3 and a hotel for three nights. Traveler is Ada Lovelace."*
-3. Approve each card as it appears: first the script Monty wrote, then each search and booking that script makes. Bookings land on the trip board as they happen.
+3. Pick an itinerary and fare from the option cards, then approve each card as it appears: the script Monty wrote, then each search and booking that script makes. Bookings land on the departures board as they happen.
 4. In a crashable workspace, choose **Crash Workers** while a booking is in progress. The page stays up and says the worker isn't answering. When the replacement worker starts, the turn finishes where it stopped.
 5. Open **Harness console** to show the same turn as events and state flow, or **Temporal UI** to show the Workflow history.
 

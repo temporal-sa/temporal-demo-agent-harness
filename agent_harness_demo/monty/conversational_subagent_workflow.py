@@ -66,6 +66,7 @@ with workflow.unsafe.imports_passed_through():
 
     from .conversational_workflow import (
         BOOKING_GUIDANCE,
+        CHOICE_GUIDANCE,
         CONCURRENCY_GUIDANCE,
         SUPPORTED_MODELS,
         SetModel,
@@ -105,6 +106,7 @@ that one handle for the rest of the conversation; don't start a new script-runne
 `{SUBAGENT_KEY}_run_script`. Keep each script focused (search, or book, or summarize) so you can \
 react to results.
 {CONCURRENCY_GUIDANCE}
+{CHOICE_GUIDANCE}
 {BOOKING_GUIDANCE}
 - After a tool result, read it and reply to the user in plain, friendly prose — summarize \
 options, prices, confirmations. You may run more scripts in follow-up turns.

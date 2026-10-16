@@ -49,7 +49,7 @@ with workflow.unsafe.imports_passed_through():
     )
     from temporal_agent_harness.harness.agent_workflow import AgentWorkflowRunner
 
-    from . import activities, trip_board
+    from . import activities, choices, trip_board
     from .models import TravelerContext
 
 
@@ -107,6 +107,19 @@ extra legroom, but there's no under-seat storage, so your bag goes overhead. Wan
 Mention any `extra_usd`. Only call `select_seat` once the traveler agrees, then `record_seat`."""
 
 
+# Shared with the subagent variant's prompt, like the guidance above.
+CHOICE_GUIDANCE = """\
+- Whenever you offer the traveler two or more trip options, don't list them in prose. In the \
+same script as the searches, build at most four options from the results and call \
+`ask_traveler_to_choose` with your question and, for each option, its legs (flight_id, route, \
+date, airline, times, stops) and the trip total at each fare. The traveler picks on cards in \
+their browser, and the call returns their `Choice`: book that option at that fare, or, if \
+`option_id` is None, read their `comment` and adjust. Annotate what you build with the \
+sandbox's types, or the type check rejects it:
+  options: list[TripOption] = []
+  option: TripOption = {"option_id": ..., "title": ..., "legs": [...], "fares": [...]}"""
+
+
 def system_instruction(base: str, context: TravelerContext | None) -> str:
     """The prompt for one session: the shared instructions, then the traveler's date.
 
@@ -128,6 +141,7 @@ and state them.
 - When you have enough to make progress, WRITE A SCRIPT and call `run_travel_code`. Keep each \
 script focused (search, or book, or summarize) so you can react to results.
 {CONCURRENCY_GUIDANCE}
+{CHOICE_GUIDANCE}
 {BOOKING_GUIDANCE}
 - After a tool result, read it and reply to the user in plain, friendly prose — summarize \
 options, prices, confirmations. You may run more scripts in follow-up turns as the \
@@ -167,10 +181,11 @@ class MontyChatAgentWorkflow:
             # gated. The trip-board tools are allowed by name, and only those: they write to the
             # agent's own notes, so there is nothing for a human to approve, and gating them
             # would mean a click between every step and the board that is supposed to be showing
-            # the steps. Named rather than `allow_inherently_safe()`, which would also stop
-            # gating the run-code tool itself and take the script review off the table.
+            # the steps. Choice cards are allowed too: asking the traveler is itself the human
+            # step. Named rather than `allow_inherently_safe()`, which would also stop gating
+            # the run-code tool itself and take the script review off the table.
             approval_policy_default=ToolApprovalPolicy.allow_tools(
-                trip_board.BOARD_TOOL_NAMES
+                [*trip_board.BOARD_TOOL_NAMES, *choices.CHOICE_TOOL_NAMES]
             ),
         )
         self._model: str = DEFAULT_MODEL
@@ -184,7 +199,7 @@ class MontyChatAgentWorkflow:
             # The travel tools plus the board tools, in one sandbox: a script can book a
             # flight and record it on the board without a round trip through the model, so
             # the board cannot drift from what was actually booked.
-            [*activities.ALL_TOOLS, *trip_board.BOARD_TOOLS],
+            [*activities.ALL_TOOLS, *trip_board.BOARD_TOOLS, *choices.CHOICE_TOOLS],
             name="run_travel_code",
             # Hidden from the model and from the generated stubs: the script names the
             # trip, never the state it lives in.

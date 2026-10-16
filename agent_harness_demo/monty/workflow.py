@@ -34,7 +34,7 @@ with workflow.unsafe.imports_passed_through():
     )
     from temporal_agent_harness.harness.agent_workflow import AgentWorkflowRunner
 
-    from . import activities, trip_board
+    from . import activities, choices, trip_board
     from .models import RunScript
 
 
@@ -58,7 +58,7 @@ class MontyDynamicAgentWorkflow:
         # calling them all as host functions. The run_script handler dispatches the caller's
         # script straight through it.
         self._run_code = agent.code_mode_tool(
-            [*activities.ALL_TOOLS, *trip_board.BOARD_TOOLS],
+            [*activities.ALL_TOOLS, *trip_board.BOARD_TOOLS, *choices.CHOICE_TOOLS],
             name="run_travel_code",
             # Supplied per host call and hidden from the script: a script names a trip, never
             # the state the board lives in.

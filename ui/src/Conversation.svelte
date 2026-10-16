@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { HarnessMessage, MessagePart, ToolPart } from "@temporalio/agent-harness-client";
   import { policyLabel, toolBadge, toolLabel } from "./format.ts";
+  import ChoiceCards, { type Choice } from "./ChoiceCards.svelte";
   import Code from "./Code.svelte";
   import Markdown from "./Markdown.svelte";
   import type { MontyChatAgent } from "./generated/MontyChatAgent.ts";
@@ -14,7 +15,16 @@
     /** Several calls of one tool in a row, as a gathered script makes them. */
     | { kind: "tools"; name: string; parts: ToolPart[] };
 
-  let { messages }: { messages: readonly Message[] } = $props();
+  let {
+    messages,
+    answerChoice,
+  }: {
+    messages: readonly Message[];
+    /** Answers a choice-card callback with the traveler's pick. */
+    answerChoice: (toolId: string, choice: Choice) => Promise<unknown>;
+  } = $props();
+
+  const CHOICE_TOOL = "ask_traveler_to_choose";
 
   let scroller: HTMLElement | undefined = $state();
   // Follow the newest content until the reader scrolls up to read; scrolling back to the
@@ -61,7 +71,7 @@
       } else if (part.type === "thought_summary") {
         if (last?.kind === "thought") last.text += part.text;
         else out.push({ kind: "thought", text: part.text });
-      } else if (part.type === "tool" && typeof part.input.script !== "string") {
+      } else if (part.type === "tool" && typeof part.input.script !== "string" && part.toolName !== CHOICE_TOOL) {
         const prev = last?.kind === "part" && last.part.type === "tool" ? last.part : null;
         if (last?.kind === "tools" && last.name === part.toolName) last.parts.push(part);
         else if (prev && prev.toolName === part.toolName && typeof prev.input.script !== "string") {
@@ -172,6 +182,9 @@
                   </span>
                 {/if}
               </div>
+            {:else if segment.part.type === "tool" && segment.part.toolName === CHOICE_TOOL}
+              {@const call = segment.part}
+              <ChoiceCards part={call} answer={(choice) => answerChoice(call.toolId, choice)} />
             {:else if segment.part.type === "tool"}
               {@const tool = segment.part}
               {@const badge = toolBadge(tool.state)}
@@ -220,8 +233,13 @@
 
 <style>
   .conversation { display: flex; flex-direction: column; gap: .8rem; min-height: 0; }
-  .messages { list-style: none; margin: 0; padding: 0 .2rem 0 0; overflow: auto; display: grid; gap: 1.2rem; align-content: start; flex: 1; }
-  .turn { display: grid; gap: .5rem; }
+  .messages {
+    list-style: none; margin: 0; padding: 0 .2rem 0 0; overflow: auto; display: grid; gap: 1.2rem;
+    align-content: start; flex: 1;
+    /* One column that can shrink, so wide content scrolls inside itself instead of overflowing. */
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .turn { display: grid; gap: .5rem; min-width: 0; grid-template-columns: minmax(0, 1fr); }
   .you {
     margin: 0; justify-self: end; max-width: 85%; padding: .55rem .8rem;
     background: rgba(68, 76, 231, .25); border: 1px solid var(--uv);
