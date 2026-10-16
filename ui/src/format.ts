@@ -52,3 +52,22 @@ export type Model = "gemini-3.8-flash" | "gemini-3.1-flash-lite";
 
 /** The models `set_model` accepts; the first is the agent's default. */
 export const MODELS: Model[] = ["gemini-3.8-flash", "gemini-3.1-flash-lite"];
+
+/** A one-line summary of a tool call's arguments, for a list of many at once. */
+export function callSummary(toolName: string, input: Record<string, unknown>): string {
+  const req = (input.request ?? input) as Record<string, string>;
+  switch (toolName) {
+    case "search_flights":
+      return `${req.origin} → ${req.destination} · ${req.date}`;
+    case "search_hotels":
+      return `${req.city} · ${req.check_in} → ${req.check_out}`;
+    case "book_flight":
+      return `${req.flight_id} · ${req.passenger_name}`;
+    case "book_hotel":
+      return `${req.hotel_id} · ${req.guest_name}`;
+    default: {
+      const text = JSON.stringify(req);
+      return text.length > 90 ? `${text.slice(0, 87)}…` : text;
+    }
+  }
+}

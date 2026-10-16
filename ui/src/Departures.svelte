@@ -68,7 +68,10 @@
                 <SplitFlap text={row.from || row.label} width={10} {still} />
               {/if}
             </td>
-            <td><SplitFlap text={row.date.slice(5) || ""} width={5} {still} /></td>
+            <td>
+              <SplitFlap text={row.date.slice(5) || ""} width={5} {still} />
+              {#if row.moreDates > 0}<span class="more mono" title="{row.moreDates} more dates searched">+{row.moreDates}</span>{/if}
+            </td>
             <td class="status {s.tone}" title={s.meaning}><SplitFlap text={s.text} width={9} {still} /></td>
             <td class="code"><SplitFlap text={row.code} width={10} {still} /></td>
           </tr>
@@ -108,6 +111,7 @@
   td.status.slate { color: var(--slate-300); }
   td.status.red { color: var(--red); }
   td.code { color: var(--off-white); }
+  .more { margin-left: .3rem; font-size: .75rem; color: var(--indigo-100); }
   tr.detail td { font-size: .75rem; padding-top: 0; }
   .summary { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; margin-top: auto; }
   .summary p { margin: 0; }

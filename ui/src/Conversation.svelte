@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { HarnessMessage, MessagePart } from "@temporalio/agent-harness-client";
+  import type { HarnessMessage, MessagePart, ToolPart } from "@temporalio/agent-harness-client";
   import { policyLabel, toolBadge, toolLabel } from "./format.ts";
   import Code from "./Code.svelte";
   import Markdown from "./Markdown.svelte";
@@ -10,22 +10,45 @@
   type Segment =
     | { kind: "text"; text: string }
     | { kind: "thought"; text: string }
-    | { kind: "part"; part: MessagePart };
+    | { kind: "part"; part: MessagePart }
+    /** Several calls of one tool in a row, as a gathered script makes them. */
+    | { kind: "tools"; name: string; parts: ToolPart[] };
 
   let { messages }: { messages: readonly Message[] } = $props();
 
   let scroller: HTMLElement | undefined = $state();
-  let opened = false;
+  // Follow the newest content until the reader scrolls up to read; scrolling back to the
+  // bottom, or sending a message, follows again.
+  let pinned = true;
 
-  // Open at the newest turn, then follow new content while the reader stays at the bottom.
-  $effect(() => {
-    void messages.length;
-    void messages.at(-1)?.parts.length;
-    void messages.at(-1)?.parts.at(-1);
+  function onscroll() {
     if (!scroller) return;
-    const nearBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 120;
-    if (nearBottom || !opened) queueMicrotask(() => scroller?.scrollTo({ top: scroller.scrollHeight }));
-    if (messages.length > 0) opened = true;
+    pinned = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 48;
+  }
+
+  $effect(() => {
+    if (!scroller) return;
+    const list = scroller;
+    const follow = () => {
+      if (pinned) list.scrollTop = list.scrollHeight;
+    };
+    // Any growth counts: a streamed word, a tool step, a code block opening, a reflow.
+    const mutations = new MutationObserver(follow);
+    mutations.observe(list, { childList: true, subtree: true, characterData: true });
+    const resizes = new ResizeObserver(follow);
+    resizes.observe(list);
+    follow();
+    return () => {
+      mutations.disconnect();
+      resizes.disconnect();
+    };
+  });
+
+  let seen = 0;
+  $effect(() => {
+    // A message the reader just sent brings the view back to the bottom.
+    if (messages.length > seen && messages.at(-1)?.status === "sending") pinned = true;
+    seen = messages.length;
   });
 
   function segments(message: Message): Segment[] {
@@ -38,6 +61,12 @@
       } else if (part.type === "thought_summary") {
         if (last?.kind === "thought") last.text += part.text;
         else out.push({ kind: "thought", text: part.text });
+      } else if (part.type === "tool" && typeof part.input.script !== "string") {
+        const prev = last?.kind === "part" && last.part.type === "tool" ? last.part : null;
+        if (last?.kind === "tools" && last.name === part.toolName) last.parts.push(part);
+        else if (prev && prev.toolName === part.toolName && typeof prev.input.script !== "string") {
+          out[out.length - 1] = { kind: "tools", name: part.toolName, parts: [prev, part] };
+        } else out.push({ kind: "part", part });
       } else if (part.type !== "text_annotation") {
         out.push({ kind: "part", part });
       }
@@ -50,6 +79,18 @@
   }
 
   /** A one-line label for a settings change, or null for any other message. */
+  /** How many of a group of calls are in each state, busiest first. */
+  function tally(parts: ToolPart[]): [string, string, number][] {
+    const counts = new Map<string, [string, string, number]>();
+    for (const part of parts) {
+      const { label, tone } = toolBadge(part.state);
+      const entry = counts.get(label) ?? [label, tone, 0];
+      entry[2] += 1;
+      counts.set(label, entry);
+    }
+    return [...counts.values()].sort((a, b) => b[2] - a[2]);
+  }
+
   function setting(message: Message): string | null {
     if (message.handler === "set_model") return `Model → ${message.input.model}`;
     if (message.handler === "set_approval_policy") return `Approvals → ${policyLabel(message.input.new_policy)}`;
@@ -73,7 +114,7 @@
     <span class="muted">Each message is a Workflow Update</span>
   </header>
 
-  <ol class="messages" bind:this={scroller} aria-live="polite">
+  <ol class="messages" bind:this={scroller} {onscroll} aria-live="polite">
     {#if messages.length === 0}
       <li class="hint muted">
         Try: <em>“Fly Ada Lovelace from SFO to JFK on November 3, back on the 7th, and find a hotel near Central Park.”</em>
@@ -108,6 +149,16 @@
               <div class="monty"><Markdown source={segment.text} /></div>
             {:else if segment.kind === "thought"}
               <p class="thought">{segment.text}</p>
+            {:else if segment.kind === "tools"}
+              <div class="activity">
+                {#each tally(segment.parts) as [label, tone, count] (label)}
+                  <span class="badge {tone}">{count} {label}</span>
+                {/each}
+                <span class="mono">{toolLabel(segment.name)} <span class="muted">× {segment.parts.length}</span></span>
+                {#if segment.parts.some((p) => p.approval?.remember)}
+                  <span class="muted">· always allowed from now on</span>
+                {/if}
+              </div>
             {:else if segment.part.type === "model_interaction"}
               {@const call = segment.part}
               <div class="activity model">

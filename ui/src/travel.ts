@@ -12,7 +12,10 @@ export interface Row {
   /** Flight: origin and destination codes. Hotel: the city, twice. */
   from: string;
   to: string;
+  /** The first date searched or booked for this row. */
   date: string;
+  /** How many other dates were searched on this route, shown as "+N". */
+  moreDates: number;
   /** Flight number or hotel name, once known. */
   label: string;
   code: string;
@@ -72,9 +75,12 @@ export function departures(agents: readonly AgentView[], board: TripBoard | unde
   const rows = new Map<string, Row>();
   const hotelCities = new Map<string, string>();
 
-  function upsert(row: Row) {
+  // Every date searched on a route, so a broad search reads as one row with "+N" more.
+  const searchedDates = new Map<string, Set<string>>();
+
+  function upsert(row: Omit<Row, "moreDates">) {
     const existing = rows.get(row.key);
-    if (!existing) return void rows.set(row.key, row);
+    if (!existing) return void rows.set(row.key, { ...row, moreDates: 0 });
     rows.set(row.key, {
       ...existing,
       stage: RANK[row.stage] >= RANK[existing.stage] ? row.stage : existing.stage,
@@ -91,15 +97,17 @@ export function departures(agents: readonly AgentView[], board: TripBoard | unde
   for (const part of tools) {
     const req = request(part);
     if (part.toolName === "search_flights" && req.origin && req.destination) {
+      const route = `${req.origin}-${req.destination}`;
+      if (req.date) searchedDates.set(route, (searchedDates.get(route) ?? new Set()).add(req.date));
       upsert({
-        key: `flight:${req.origin}-${req.destination}`, kind: "flight", stage: stageOf(part, "search"),
-        from: req.origin, to: req.destination, date: req.date ?? "", label: "", code: "", price: null,
+        key: `search:${route}`, kind: "flight", stage: stageOf(part, "search"),
+        from: req.origin, to: req.destination, date: "", label: "", code: "", price: null,
       });
     } else if (part.toolName === "book_flight" && req.flight_id) {
       const parsed = parseFlightId(req.flight_id);
       if (!parsed) continue;
       upsert({
-        key: `flight:${parsed[0]}-${parsed[1]}`, kind: "flight", stage: stageOf(part, "book"),
+        key: `flight:${req.flight_id}`, kind: "flight", stage: stageOf(part, "book"),
         from: parsed[0], to: parsed[1], date: "", label: `FL ${parsed[2]}`, code: "", price: null,
       });
     } else if (part.toolName === "search_hotels" && req.city) {
@@ -126,7 +134,7 @@ export function departures(agents: readonly AgentView[], board: TripBoard | unde
       const parsed = id ? parseFlightId(id) : null;
       const airline = flight.detail.replace(/FL-[A-Z]{6}-\d+/, "").trim();
       upsert({
-        key: parsed ? `flight:${parsed[0]}-${parsed[1]}` : `flight:${flight.confirmation_code}`,
+        key: id ? `flight:${id}` : `flight:${flight.confirmation_code}`,
         kind: "flight", stage: "confirmed", from: parsed?.[0] ?? "", to: parsed?.[1] ?? "", date: "",
         label: parsed ? `${airlineCode(airline)} ${parsed[2]}` : flight.detail,
         code: flight.confirmation_code, price: flight.price_usd ?? null,
@@ -142,6 +150,21 @@ export function departures(agents: readonly AgentView[], board: TripBoard | unde
       });
     }
   }
+  // A route's search row gives way to its bookings, which take its date when only one was
+  // searched. Otherwise it shows the first date searched and how many more.
+  const booked = new Set<string>();
+  for (const row of rows.values()) if (row.key.startsWith("flight:")) booked.add(`${row.from}-${row.to}`);
+  for (const [key, row] of rows) {
+    const route = `${row.from}-${row.to}`;
+    const dates = [...(searchedDates.get(route) ?? [])].sort();
+    if (key.startsWith("search:")) {
+      if (booked.has(route)) rows.delete(key);
+      else rows.set(key, { ...row, date: dates[0] ?? "", moreDates: Math.max(dates.length - 1, 0) });
+    } else if (key.startsWith("flight:") && !row.date && dates.length === 1) {
+      rows.set(key, { ...row, date: dates[0] });
+    }
+  }
+
   // By date, like a real board; a flight sorts ahead of the stay that starts the same day.
   return [...rows.values()].sort(
     (a, b) => (a.date || "9999").localeCompare(b.date || "9999") || (a.kind === "flight" ? -1 : 1),

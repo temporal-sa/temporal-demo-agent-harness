@@ -1,7 +1,7 @@
 <script lang="ts">
   import { AgentSession } from "@temporalio/agent-harness-svelte";
   import type { MontyChatAgent, TripBoard as Board } from "./generated/MontyChatAgent.ts";
-  import ApprovalCard from "./ApprovalCard.svelte";
+  import ApprovalQueue from "./ApprovalQueue.svelte";
   import Conversation from "./Conversation.svelte";
   import { MODELS, type Model, type Policy } from "./format.ts";
   import Settings from "./Settings.svelte";
@@ -125,9 +125,14 @@
 
     <Conversation {messages} />
 
-    {#each agent.pendingApprovals as call (call.part.toolId)}
-      <ApprovalCard {call} respond={(decision) => agent.respondToApproval(call.part.toolId, decision)} />
-    {/each}
+    {#if agent.pendingApprovals.length > 0}
+      <div class="approvals">
+        <ApprovalQueue
+          calls={agent.pendingApprovals}
+          respond={(call, decision) => agent.respondToApproval(call.part.toolId, decision)}
+        />
+      </div>
+    {/if}
 
     <Settings
       {model}
@@ -162,7 +167,10 @@
   }
   .travel { display: grid; grid-template-rows: minmax(12rem, 1fr) minmax(14rem, 1.15fr); gap: 1rem; min-height: 0; }
   .side { display: flex; flex-direction: column; gap: .8rem; min-height: 0; }
-  .side > :global(.conversation) { flex: 1; }
+  .side > * { flex-shrink: 0; }
+  .side > :global(.conversation) { flex: 1 1 0; min-height: 8rem; }
+  /* However many calls wait at once, the conversation keeps its share of the column. */
+  .approvals { max-height: 55%; overflow: auto; flex-shrink: 1; min-height: 0; }
   .recovering { border-color: var(--yellow); display: grid; gap: .5rem; }
   .failure { border-color: var(--red); display: grid; gap: .5rem; justify-items: start; }
   .recovering p, .failure p { margin: 0; }
