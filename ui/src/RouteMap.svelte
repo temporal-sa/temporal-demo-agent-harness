@@ -59,15 +59,24 @@
     return project(AIRPORTS[code]);
   }
 
-  /** A shallow arc from one airport to another, bowed to the left of travel. Pass an
-   *  origin to get the same arc relative to that point, for Ziggy's flight path. */
-  function arc(from: string, to: string, [ox, oy]: readonly [number, number] = [0, 0]): string {
+  /** The ends and control point of the shallow arc from one airport to another, bowed to
+   *  the left of travel. */
+  function curve(from: string, to: string) {
     const [x1, y1] = point(from);
     const [x2, y2] = point(to);
     const bow = 0.22;
-    const cx = (x1 + x2) / 2 + (y2 - y1) * bow;
-    const cy = (y1 + y2) / 2 - (x2 - x1) * bow;
-    return `M ${x1 - ox} ${y1 - oy} Q ${cx - ox} ${cy - oy} ${x2 - ox} ${y2 - oy}`;
+    return { x1, y1, x2, y2, cx: (x1 + x2) / 2 + (y2 - y1) * bow, cy: (y1 + y2) / 2 - (x2 - x1) * bow };
+  }
+
+  function arc(from: string, to: string): string {
+    const { x1, y1, x2, y2, cx, cy } = curve(from, to);
+    return `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`;
+  }
+
+  /** The halfway point along `arc(from, to)`. */
+  function midpoint(from: string, to: string): readonly [number, number] {
+    const { x1, y1, x2, y2, cx, cy } = curve(from, to);
+    return [0.25 * x1 + 0.5 * cx + 0.25 * x2, 0.25 * y1 + 0.5 * cy + 0.25 * y2];
   }
 
   const TONE: Record<Stage, string> = {
@@ -75,8 +84,9 @@
     confirmed: "green", declined: "slate", failed: "red",
   };
 
-  // Ziggy flies the leg Monty is working on, circles while no worker answers, and otherwise
-  // waits where the trip last landed.
+  // Ziggy sits halfway along the leg Monty is working on, at its origin while it waits for
+  // clearance or a worker, and otherwise where the trip last landed. The plane holds still;
+  // the caption and the board say what is happening.
   const active = $derived(flights.findLast((r) => ["searching", "boarding", "clearance"].includes(r.stage)));
   const landed = $derived(flights.findLast((r) => r.stage === "confirmed"));
   const ziggyMode = $derived(
@@ -91,6 +101,7 @@
       const [x, y] = point(landed.to);
       return [x, y - 30] as const; // above the airport, clear of its label
     }
+    if (active && ziggyMode === "flying") return midpoint(active.from, active.to);
     if (active) return point(active.from);
     if (landed) return point(landed.to);
     return [W / 2, H / 2] as const;
@@ -176,12 +187,7 @@
     {/each}
 
     <g transform="translate({ziggyAt[0]} {ziggyAt[1]})">
-      <g class="ziggy-pilot" class:holding={ziggyMode === "holding"}>
-        {#if ziggyMode === "flying" && active}
-          <animateMotion dur="3.2s" repeatCount="indefinite" path={arc(active.from, active.to, ziggyAt)} />
-        {:else if ziggyMode === "holding"}
-          <animateMotion dur="4s" repeatCount="indefinite" path="M 0 -34 A 34 34 0 1 1 -0.1 -34" />
-        {/if}
+      <g class="ziggy-pilot">
         <!-- A small airliner, nose to the right, with Ziggy at the controls. -->
         <g transform="scale({0.7 * heading} 0.7) translate(-52 -24)">
           <path class="plane fin" d="M14 17 L6 1 L17 1 L30 17 Z" />
