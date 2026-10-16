@@ -107,6 +107,26 @@
   }
 
   const tokens = new Intl.NumberFormat("en-US", { notation: "compact" });
+
+  // How long each model call has been waiting on the model. Gemini can take a couple of
+  // minutes before its first word, and saying so beats a spinner that looks stuck. A page
+  // opened mid-call counts from when it first saw the call.
+  const SLOW_MS = 30_000;
+  const startedAt = new Map<string, number>();
+  let now = $state(Date.now());
+  const modelRunning = $derived(
+    messages.some((m) => m.parts.some((p) => p.type === "model_interaction" && p.status === "running")),
+  );
+  $effect(() => {
+    if (!modelRunning) return;
+    const timer = setInterval(() => (now = Date.now()), 1000);
+    return () => clearInterval(timer);
+  });
+  function waited(key: string): number {
+    if (!startedAt.has(key)) startedAt.set(key, Date.now());
+    return Math.max(0, now - startedAt.get(key)!);
+  }
+  const clock = (ms: number) => `${Math.floor(ms / 60_000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}`;
 </script>
 
 <section class="card conversation" aria-labelledby="chat-title">
@@ -164,8 +184,12 @@
               {@const call = segment.part}
               <div class="activity model">
                 {#if call.status === "running"}
+                  {@const ms = waited(`${message.id}:${i}`)}
                   <span class="badge progress">thinking</span>
-                  <span class="mono thinking">{call.model ?? "model"}</span>
+                  <span class="mono thinking">{call.model ?? "model"} · {clock(ms)}</span>
+                  {#if ms >= SLOW_MS}
+                    <span class="muted">· Gemini is taking a while to respond. Monty's Workflow is waiting on it, durably.</span>
+                  {/if}
                 {:else}
                   <span class="badge idle">model call</span>
                   <span class="mono muted">

@@ -71,10 +71,30 @@
   // A message also stays "sending" until a worker accepts its Update, and the stream
   // reconnects when it can't reach the agent. Any of these lasting long enough to notice
   // means no worker is answering.
+  //
+  // Except while a model call runs: the model can be silent for minutes, and a quiet stream
+  // is then just Monty thinking (the chat says so). Past the Gemini activity's 3-minute
+  // start-to-close timeout, a call still showing as running does mean no worker finished it.
+  const MODEL_TIMEOUT_MS = 200_000;
+  let modelSince = $state<number | null>(null);
+  const thinking = $derived(
+    Object.values(agent.agents).some((view) =>
+      view.messages.some((m) => m.parts.some((p) => p.type === "model_interaction" && p.status === "running")),
+    ),
+  );
+  $effect(() => {
+    if (!thinking) {
+      modelSince = null;
+      return;
+    }
+    modelSince ??= Date.now();
+    const timer = setInterval(() => (now = Date.now()), 1000);
+    return () => clearInterval(timer);
+  });
+  const quietForModel = $derived(thinking && modelSince !== null && now - modelSince < MODEL_TIMEOUT_MS);
   const waiting = $derived(
     stalled ||
-      agent.connection === "connecting" ||
-      agent.connection === "reconnecting" ||
+      (!quietForModel && (agent.connection === "connecting" || agent.connection === "reconnecting")) ||
       agent.pending.some((message) => message.status === "sending"),
   );
   let away = $state(false);

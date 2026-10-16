@@ -27,7 +27,7 @@ import time
 from pathlib import Path
 from contextlib import asynccontextmanager
 from dataclasses import asdict
-from typing import Annotated
+from typing import Annotated, AsyncIterator
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
@@ -89,6 +89,12 @@ SESSION_LIST_LIMIT = 50
 # What may follow the owner prefix in a session ID the browser chooses.
 SESSION_SUFFIX = re.compile(r"[A-Za-z0-9_-]{1,64}")
 
+# A model call can stream nothing for minutes before its first word. Load balancers close a
+# connection that stays idle (AWS's default is 60 seconds), so a quiet stream gets an SSE
+# comment this often; the browser's parser skips comments.
+KEEPALIVE_SECONDS = 15
+KEEPALIVE = b": keepalive\n\n"
+
 DEMO_UI_DIST = Path(__file__).parent / "ui_dist"
 # Added to the console's page so each view can open the same session in the other.
 CONSOLE_BACK_LINK = """<a id="demo-view-link" href="../" style="position:fixed;right:150px;top:12px;z-index:9999;
@@ -134,6 +140,32 @@ async def require_owned(temporal: Client, prefix: str, workflow_id: str) -> None
             return
     # 404 rather than 403, so IDs belonging to other people aren't confirmed to exist.
     raise HTTPException(status_code=404, detail="Session not found")
+
+
+async def with_keepalive(
+    stream: AsyncIterator[bytes], every: float = KEEPALIVE_SECONDS
+) -> AsyncIterator[bytes]:
+    """The stream's frames as they come, with a keepalive comment whenever it's quiet for `every`."""
+    items = aiter(stream)
+    pending = asyncio.ensure_future(anext(items))
+    try:
+        while True:
+            done, _ = await asyncio.wait({pending}, timeout=every)
+            if not done:
+                yield KEEPALIVE
+                continue
+            try:
+                frame = pending.result()
+            except StopAsyncIteration:
+                return
+            yield frame
+            pending = asyncio.ensure_future(anext(items))
+    finally:
+        # Let the cancelled read finish before closing the stream it was reading.
+        pending.cancel()
+        await asyncio.gather(pending, return_exceptions=True)
+        if hasattr(items, "aclose"):
+            await items.aclose()
 
 
 def load_registry() -> AgentRegistry:
@@ -287,7 +319,7 @@ def create_app() -> FastAPI:
     async def attach(session_id: str, prefix: Owner, from_offset: int = 0):
         agent = await owned_agent(prefix, session_id)
         return StreamingResponse(
-            await agent.attach(on_item=_yield_item, from_offset=from_offset),
+            with_keepalive(await agent.attach(on_item=_yield_item, from_offset=from_offset)),
             media_type="text/event-stream",
             headers=_sse_headers(),
         )
@@ -331,7 +363,9 @@ def create_app() -> FastAPI:
 
         msg_type, payload = _message_parts(req)
         return StreamingResponse(
-            await agent.send_message(msg_type, payload, on_item=on_item, update_id=_update_id(req)),
+            with_keepalive(
+                await agent.send_message(msg_type, payload, on_item=on_item, update_id=_update_id(req))
+            ),
             media_type="text/event-stream",
             headers=_sse_headers(),
         )
