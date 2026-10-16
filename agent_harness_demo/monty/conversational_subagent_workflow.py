@@ -64,7 +64,7 @@ with workflow.unsafe.imports_passed_through():
     )
     from temporal_agent_harness.harness.agent_workflow import AgentWorkflowRunner
 
-    from .conversational_workflow import SUPPORTED_MODELS, SetModel
+    from .conversational_workflow import CONCURRENCY_GUIDANCE, SUPPORTED_MODELS, SetModel
     from .workflow import MontyDynamicAgentWorkflow
 
 
@@ -95,8 +95,9 @@ and state them.
 - Before running your first script, call `start_{SUBAGENT_KEY}` to get a handle. Keep using \
 that one handle for the rest of the conversation; don't start a new script-runner per script.
 - When you have enough to make progress, WRITE A SCRIPT and run it with \
-`{SUBAGENT_KEY}_run_script`. Run independent host calls concurrently with `asyncio.gather`; keep \
-each script focused (search, or book, or summarize) so you can react to results.
+`{SUBAGENT_KEY}_run_script`. Keep each script focused (search, or book, or summarize) so you can \
+react to results.
+{CONCURRENCY_GUIDANCE}
 - After a tool result, read it and reply to the user in plain, friendly prose — summarize \
 options, prices, confirmations. You may run more scripts in follow-up turns.
 - Never invent flight/hotel ids or confirmation codes — only use ones returned by a script."""

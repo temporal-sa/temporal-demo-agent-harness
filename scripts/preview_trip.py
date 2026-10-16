@@ -39,25 +39,27 @@ async def main():
     legs = [("SFO", "JFK", "2026-11-03"), ("JFK", "LHR", "2026-11-06"), ("LHR", "SFO", "2026-11-12")]
     stays = [("New York", "2026-11-03", "2026-11-06", 3), ("London", "2026-11-06", "2026-11-12", 6)]
 
-    # The searches of each kind run at once; each is its own durable Activity.
-    flights_found = await asyncio.gather(
-        *[search_flights({"origin": o, "destination": d, "date": day}) for o, d, day in legs]
+    # Every search at once: each is its own durable Activity. Calls of one type share an
+    # inner gather, because the sandbox type-checks each result.
+    flights_found, hotels_found = await asyncio.gather(
+        asyncio.gather(*[search_flights({"origin": o, "destination": d, "date": day}) for o, d, day in legs]),
+        asyncio.gather(*[search_hotels({"city": c, "check_in": i, "check_out": out}) for c, i, out, _ in stays]),
     )
-    hotels_found = await asyncio.gather(
-        *[search_hotels({"city": c, "check_in": i, "check_out": out}) for c, i, out, _ in stays]
+    flights = [min(found["flights"], key=lambda f: f["price_usd"]) for found in flights_found]
+    hotels = [min(found["hotels"], key=lambda h: h["price_per_night_usd"]) for found in hotels_found]
+
+    # Then every booking at once, flights and hotels each in their own gather.
+    flights_booked, hotels_booked = await asyncio.gather(
+        asyncio.gather(*[book_flight({"flight_id": f["flight_id"], "passenger_name": "Ada Lovelace"}) for f in flights]),
+        asyncio.gather(*[book_hotel({"hotel_id": h["hotel_id"], "guest_name": "Ada Lovelace"}) for h in hotels]),
     )
 
-    for (o, d, _), result in zip(legs, flights_found):
-        flight = min(result["flights"], key=lambda f: f["price_usd"])
-        booked = await book_flight({"flight_id": flight["flight_id"], "passenger_name": "Ada Lovelace"})
+    for (o, d, _), flight, booked in zip(legs, flights, flights_booked):
         await record_booking({"trip_id": trip_id, "kind": "flight",
                               "confirmation_code": booked["confirmation_code"],
                               "detail": flight["airline"] + " " + flight["flight_id"],
                               "price_usd": flight["price_usd"], "completes": ["Book " + o + " to " + d]})
-
-    for (city, _, _, nights), result in zip(stays, hotels_found):
-        hotel = min(result["hotels"], key=lambda h: h["price_per_night_usd"])
-        booked = await book_hotel({"hotel_id": hotel["hotel_id"], "guest_name": "Ada Lovelace"})
+    for (city, _, _, nights), hotel, booked in zip(stays, hotels, hotels_booked):
         await record_booking({"trip_id": trip_id, "kind": "hotel",
                               "confirmation_code": booked["confirmation_code"],
                               "detail": hotel["name"] + " " + hotel["hotel_id"],

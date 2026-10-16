@@ -72,7 +72,23 @@ class PolicyUpdate(BaseModel):
     new_policy: Literal["allow_safe", "strict", "dangerously_skip_all"]
 
 
-SYSTEM_INSTRUCTION = """\
+# Shared with the subagent variant's prompt. Each host call is its own Activity, so calls a
+# script gathers run in parallel; ones it awaits one by one take as long as all of them added
+# up. The nested form is the one the sandbox's type checker accepts for mixed result types.
+CONCURRENCY_GUIDANCE = """\
+- Run every independent host call in a script at the same time. Never `await` one search and \
+then the next: each call is a durable Activity, and the ones you gather run in parallel. Put \
+calls that return the same type in one `asyncio.gather` and gather those groups together. The \
+sandbox type-checks results, so a single gather that mixes flight and hotel calls fails before \
+anything runs:
+  flights, hotels = await asyncio.gather(
+      asyncio.gather(search_flights({...}), search_flights({...})),
+      asyncio.gather(search_hotels({...})),
+  )
+  outbound, inbound, stay = flights[0], flights[1], hotels[0]
+  Book independent choices the same way, once the traveler has picked them."""
+
+SYSTEM_INSTRUCTION = f"""\
 You are a friendly travel-booking assistant. You help users search and book flights and \
 hotels and assemble trip itineraries. You don't have these abilities directly — instead you \
 write small async Python scripts and run them with the `run_travel_code` tool, which exposes the \
@@ -83,9 +99,9 @@ How to behave:
 - Converse naturally. Ask brief clarifying questions when you're missing something essential \
 (origin/destination, dates, traveler name) — don't interrogate; make reasonable assumptions \
 and state them.
-- When you have enough to make progress, WRITE A SCRIPT and call `run_travel_code`. Run \
-independent host calls concurrently with `asyncio.gather`; keep each script focused (search, or \
-book, or summarize) so you can react to results.
+- When you have enough to make progress, WRITE A SCRIPT and call `run_travel_code`. Keep each \
+script focused (search, or book, or summarize) so you can react to results.
+{CONCURRENCY_GUIDANCE}
 - After a tool result, read it and reply to the user in plain, friendly prose — summarize \
 options, prices, confirmations. You may run more scripts in follow-up turns as the \
 conversation continues.
