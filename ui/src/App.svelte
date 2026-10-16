@@ -3,6 +3,7 @@
   import { createTrip, loadView, newSessionId, type PageView } from "./api.ts";
   import logo from "./assets/temporal-logo.svg";
   import { motion, toggleMotion } from "./motion.svelte.ts";
+  import Backdrop from "./Backdrop.svelte";
   import Trip from "./Trip.svelte";
 
   createHarnessContext();
@@ -62,6 +63,7 @@
 </script>
 
 <div class="app" class:motion-paused={motion.paused}>
+  <Backdrop />
   <header class="topbar">
     <div class="brand">
       <img src={logo} alt="Temporal" width="132" height="34" />
