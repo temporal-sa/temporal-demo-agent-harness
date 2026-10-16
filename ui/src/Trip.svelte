@@ -181,6 +181,10 @@
   }
   textarea:focus-visible { outline: none; border-color: var(--green); box-shadow: 0 0 0 2px var(--green-soft); }
   @media (max-width: 900px) {
-    .workspace { grid-template-columns: 1fr; grid-auto-rows: minmax(18rem, auto); }
+    .workspace { grid-template-columns: 1fr; grid-auto-rows: auto; }
+    /* Stacked, the page scrolls, so give each column a screen's worth of height of its own:
+       the conversation then scrolls inside it, as it does side by side. */
+    .travel { height: min(90dvh, 48rem); }
+    .side { height: min(90dvh, 52rem); }
   }
 </style>
