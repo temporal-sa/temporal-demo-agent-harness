@@ -80,7 +80,7 @@ class Booking(HarnessState):
     fare: str | None = None
     """A flight's fare level, as `book_flight` returned it."""
     seat: str | None = None
-    """A flight's seat, as `book_flight` returned it."""
+    """A flight's seat, once `select_seat` has chosen one."""
 
 
 class Trip(HarnessState):
@@ -128,6 +128,12 @@ class RecordBookingRequest(BaseModel):
     seat: str | None = None
     completes: list[str] = []
     """Checklist items this booking finishes, ticked off in the same commit."""
+
+
+class RecordSeatRequest(BaseModel):
+    trip_id: str
+    confirmation_code: str
+    seat: str
 
 
 class TripStatusRequest(BaseModel):
@@ -337,7 +343,8 @@ async def record_booking(
     Call it immediately after `book_flight` / `book_hotel` returns, with the confirmation
     code that call gave you — never one you made up. `detail` is the line a person would
     want to read back: airline, flight number and times, or hotel name and nights. For a
-    flight, pass the `fare`, `seat`, and `price_usd` that `book_flight` returned.
+    flight, pass the `fare` and `price_usd` that `book_flight` returned; record its seat
+    later with `record_seat`.
 
     `completes` names the checklist items this booking satisfies; they are ticked in the
     same commit as the booking, so the board never shows a trip with the flight booked and
@@ -384,6 +391,26 @@ async def record_booking(
 
 
 @agent.tool_defn(inherently_safe=True)
+async def record_seat(
+    request: RecordSeatRequest, board: agent.Injected[StateRef[TripBoard]]
+) -> TripBoardResponse:
+    """Record the seat `select_seat` gave a booked flight, by its confirmation code."""
+    index = _find_trip(board.current, request.trip_id)
+    if index is None:
+        return _no_such_trip(board, request.trip_id)
+    flights = board.current.trips[index].flights
+    position = next(
+        (i for i, f in enumerate(flights) if f.confirmation_code == request.confirmation_code), None
+    )
+    if position is None:
+        note = f"No flight {request.confirmation_code} on this trip; record the booking first."
+        return _reply(board, index, note)
+    with board.mutate() as draft:
+        draft.trips[index].flights[position].seat = request.seat
+    return _reply(board, index, f"Seat {request.seat} recorded on {request.confirmation_code}.")
+
+
+@agent.tool_defn(inherently_safe=True)
 async def set_trip_status(
     request: TripStatusRequest, board: agent.Injected[StateRef[TripBoard]]
 ) -> TripBoardResponse:
@@ -416,6 +443,7 @@ BOARD_TOOLS = [
     add_trip_tasks,
     complete_trip_tasks,
     record_booking,
+    record_seat,
     set_trip_status,
     read_trip_board,
 ]

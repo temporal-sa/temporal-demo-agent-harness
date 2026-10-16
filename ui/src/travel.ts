@@ -123,8 +123,12 @@ export function departures(agents: readonly AgentView[], board: TripBoard | unde
       upsert({
         key: `flight:${req.flight_id}`, kind: "flight", stage: stageOf(part, "book"),
         from: flight.from, to: flight.to, date: flight.date, label: `FL ${flight.number}`,
-        code: "", price: null, fare: req.fare ?? "economy", seat: req.seat ?? null,
+        code: "", price: null, fare: req.fare ?? "economy", seat: null,
       });
+    } else if (part.toolName === "select_seat" && req.flight_id && part.state === "done") {
+      // A seat chosen after booking lands on the flight's row once the airline confirms it.
+      const row = rows.get(`flight:${req.flight_id}`);
+      if (row) rows.set(row.key, { ...row, seat: req.seat });
     } else if (part.toolName === "search_hotels" && req.city) {
       const prefix = req.city.slice(0, 3).toUpperCase();
       hotelCities.set(prefix, req.city);

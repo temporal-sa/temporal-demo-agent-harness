@@ -55,6 +55,8 @@ class Seat(BaseModel):
     cabin: FareLevel
     extra_usd: float
     """Added to the fare: economy exit rows cost extra."""
+    features: list[str]
+    """What the seat is like, good and bad: "window", "exit row", "no under-seat storage"."""
 
 
 class SeatMapRequest(BaseModel):
@@ -70,8 +72,6 @@ class FlightBookingRequest(BaseModel):
     flight_id: str
     passenger_name: str
     fare: FareLevel = "economy"
-    seat: str | None = None
-    """An open seat in the fare's cabin, from `get_seat_map`. None leaves it to the airline."""
 
 
 class FlightBookingResponse(BaseModel):
@@ -79,9 +79,25 @@ class FlightBookingResponse(BaseModel):
     flight_id: str
     passenger_name: str
     fare: FareLevel
-    seat: str | None
     price_usd: float
-    """The fare plus any seat charge."""
+    status: str
+
+
+class SeatSelectionRequest(BaseModel):
+    """Choose a seat on a flight already booked; the booking details must match its code."""
+
+    confirmation_code: str
+    flight_id: str
+    passenger_name: str
+    fare: FareLevel
+    seat: str
+
+
+class SeatSelectionResponse(BaseModel):
+    confirmation_code: str
+    seat: str
+    features: list[str]
+    extra_usd: float
     status: str
 
 

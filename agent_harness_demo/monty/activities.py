@@ -45,6 +45,8 @@ from .travel_models import (
     Seat,
     SeatMapRequest,
     SeatMapResponse,
+    SeatSelectionRequest,
+    SeatSelectionResponse,
 )
 
 # ---------------------------------------------------------------------------
@@ -75,6 +77,7 @@ CABINS: dict[FareLevel, tuple[range, str]] = {
 }
 EXIT_ROWS = {12, 13}
 EXIT_ROW_EXTRA_USD = 40.0
+LAST_ROW = 30
 
 FLIGHT_ID = re.compile(r"^FL-[A-Z]{6}-\d{8}-\d{3}$")
 
@@ -112,6 +115,28 @@ def _flight(flight_id: str) -> Flight:
     )
 
 
+def _seat_features(row: int, letter: str, rows: range, letters: str) -> list[str]:
+    """What a traveler would want to know about a seat, the drawbacks as well as the perks."""
+    center = len(letters) // 2
+    aisle_seats = letters[center - 1 : center + 1]  # the letters either side of the aisle
+    features = []
+    if letter in (letters[0], letters[-1]):
+        features.append("window")
+    elif letter in aisle_seats:
+        features.append("aisle")
+    else:
+        features.append("middle")
+    if row == rows.start:
+        features += ["bulkhead", "extra legroom", "no under-seat storage"]
+    if row in EXIT_ROWS:
+        features += ["exit row", "extra legroom", "no under-seat storage", "must be able to assist"]
+    if row + 1 in EXIT_ROWS and row not in EXIT_ROWS:
+        features.append("limited recline")
+    if row == LAST_ROW:
+        features += ["no recline", "near the lavatory"]
+    return features
+
+
 def _open_seats(flight_id: str) -> list[Seat]:
     """About a third of each cabin is still open, the same third every time."""
     rng = random.Random(f"seats:{flight_id}")
@@ -120,6 +145,7 @@ def _open_seats(flight_id: str) -> list[Seat]:
             seat=f"{row}{letter}",
             cabin=cabin,
             extra_usd=EXIT_ROW_EXTRA_USD if row in EXIT_ROWS else 0.0,
+            features=_seat_features(row, letter, rows, letters),
         )
         for cabin, (rows, letters) in CABINS.items()
         for row in rows
@@ -128,10 +154,8 @@ def _open_seats(flight_id: str) -> list[Seat]:
     ]
 
 
-def _seat_charge(flight_id: str, seat_code: str | None, fare: FareLevel) -> float:
-    """The extra charge for a requested seat, refusing one that's taken or in another cabin."""
-    if seat_code is None:
-        return 0.0
+def _open_seat(flight_id: str, seat_code: str, fare: FareLevel) -> Seat:
+    """The requested seat, refusing one that's taken or in another cabin."""
     seat = next((s for s in _open_seats(flight_id) if s.seat == seat_code), None)
     if seat is None:
         raise ApplicationError(
@@ -140,10 +164,10 @@ def _seat_charge(flight_id: str, seat_code: str | None, fare: FareLevel) -> floa
         )
     if seat.cabin != fare:
         raise ApplicationError(
-            f"Seat {seat_code} is in {seat.cabin}, not {fare}; change the fare or the seat.",
+            f"Seat {seat_code} is in {seat.cabin}, not {fare}; pick a {fare} seat.",
             non_retryable=True,
         )
-    return seat.extra_usd
+    return seat
 
 
 def _require_flight(flight_id: str) -> None:
@@ -237,15 +261,13 @@ async def search_hotels_activity(request: HotelSearchRequest) -> HotelSearchResp
     activity_config=ActivityConfig(start_to_close_timeout=_MONTY_ACTIVITY_TIMEOUT),
 )
 async def book_flight_activity(request: FlightBookingRequest) -> FlightBookingResponse:
-    """Book a flight at a fare level, optionally in a chosen seat, and return a confirmation
-    code. The seat must be open and in the fare's cabin."""
+    """Book a flight at a fare level and return a confirmation code. Choose a seat afterward
+    with `select_seat`."""
     activity.logger.info(
-        "Booking %s (%s, seat %s) for %s",
-        request.flight_id, request.fare, request.seat or "any", request.passenger_name,
+        "Booking %s (%s) for %s", request.flight_id, request.fare, request.passenger_name
     )
     _require_flight(request.flight_id)
     fare = next(f for f in _flight(request.flight_id).fares if f.level == request.fare)
-    seat_extra = _seat_charge(request.flight_id, request.seat, request.fare)
 
     # Simulate the latency of confirming the booking with the airline.
     await asyncio.sleep(random.uniform(4.0, 6.0))
@@ -255,8 +277,36 @@ async def book_flight_activity(request: FlightBookingRequest) -> FlightBookingRe
         flight_id=request.flight_id,
         passenger_name=request.passenger_name,
         fare=request.fare,
-        seat=request.seat,
-        price_usd=round(fare.price_usd + seat_extra, 2),
+        price_usd=fare.price_usd,
+        status="confirmed",
+    )
+
+
+@agent.activity_tool_defn(
+    name="select_seat",
+    activity_config=ActivityConfig(start_to_close_timeout=_MONTY_ACTIVITY_TIMEOUT),
+)
+async def select_seat_activity(request: SeatSelectionRequest) -> SeatSelectionResponse:
+    """Choose an open seat in the fare's cabin on a flight already booked. Returns the seat's
+    features and any extra charge."""
+    activity.logger.info("Selecting seat %s on %s", request.seat, request.confirmation_code)
+    booked = _make_ref("AIR", request.flight_id, request.passenger_name, request.fare)
+    if request.confirmation_code != booked:
+        raise ApplicationError(
+            f"No booking {request.confirmation_code} for {request.passenger_name} on "
+            f"{request.flight_id} in {request.fare}; use the details book_flight returned.",
+            non_retryable=True,
+        )
+    seat = _open_seat(request.flight_id, request.seat, request.fare)
+
+    # Simulate the latency of asking the airline for the seat.
+    await asyncio.sleep(random.uniform(2.0, 4.0))
+
+    return SeatSelectionResponse(
+        confirmation_code=request.confirmation_code,
+        seat=seat.seat,
+        features=seat.features,
+        extra_usd=seat.extra_usd,
         status="confirmed",
     )
 
@@ -289,5 +339,6 @@ ALL_TOOLS = [
     get_seat_map_activity,
     search_hotels_activity,
     book_flight_activity,
+    select_seat_activity,
     book_hotel_activity,
 ]

@@ -42,7 +42,9 @@
   // few seconds, so one still running well past that means no worker is answering. Temporal
   // retries it on the next worker once its 30-second start-to-close timeout passes.
   const STALLED_MS = 12_000;
-  const TRAVEL_CALLS = new Set(["search_flights", "get_seat_map", "search_hotels", "book_flight", "book_hotel"]);
+  const TRAVEL_CALLS = new Set([
+    "search_flights", "get_seat_map", "search_hotels", "book_flight", "select_seat", "book_hotel",
+  ]);
   const runningSince = new Map<string, number>();
   let now = $state(Date.now());
   const running = $derived(

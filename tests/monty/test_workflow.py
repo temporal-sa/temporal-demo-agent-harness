@@ -84,9 +84,10 @@ async def test_script_calls_host_functions(client_and_queue):
     )
 
     # Concurrently search flights AND hotels (one gathered batch → two durable activities
-    # in flight at once), then fetch the cheapest flight's seat map and book a premium seat
-    # on it — exercising the async batch driver end-to-end: a multi-call concurrent batch
-    # followed by dependent sequential calls. Host functions are ASYNC and must be awaited.
+    # in flight at once), then book the cheapest flight in premium and choose a premium seat
+    # from its seat map — exercising the async batch driver end-to-end: a multi-call
+    # concurrent batch followed by dependent sequential calls. Host functions are ASYNC and
+    # must be awaited.
     script = (
         "import asyncio\n"
         "async def main():\n"
@@ -95,12 +96,15 @@ async def test_script_calls_host_functions(client_and_queue):
         '        search_hotels({"city": "New York", "check_in": "2026-07-01", "check_out": "2026-07-05"}),\n'
         "    )\n"
         '    cheapest = min(flights["flights"], key=lambda f: f["price_usd"])\n'
+        '    flight = await book_flight({"flight_id": cheapest["flight_id"], "passenger_name": "Ada Lovelace",\n'
+        '                                "fare": "premium"})\n'
         '    seats = await get_seat_map({"flight_id": cheapest["flight_id"]})\n'
         '    seat = [s for s in seats["open_seats"] if s["cabin"] == "premium"][0]\n'
-        '    flight = await book_flight({"flight_id": cheapest["flight_id"], "passenger_name": "Ada Lovelace",\n'
+        '    chosen = await select_seat({"confirmation_code": flight["confirmation_code"],\n'
+        '                                "flight_id": flight["flight_id"], "passenger_name": "Ada Lovelace",\n'
         '                                "fare": "premium", "seat": seat["seat"]})\n'
         "    print(f\"airline={cheapest['airline']} hotels={len(hotels['hotels'])}\")\n"
-        '    return flight\n'
+        '    return [flight, chosen]\n'
         "asyncio.run(main())"
     )
     await handle.execute_update(
@@ -114,36 +118,8 @@ async def test_script_calls_host_functions(client_and_queue):
     assert "airline=" in reply
     assert "'fare': 'premium'" in reply
     assert "'passenger_name': 'Ada Lovelace'" in reply
+    assert "'features': [" in reply  # the chosen seat comes back described
     assert "AIR-" in reply  # flight confirmation code prefix
-
-
-async def test_a_seat_outside_the_fares_cabin_is_refused(client_and_queue):
-    client, task_queue = client_and_queue
-    handle = await client.start_workflow(
-        MontyDynamicAgentWorkflow.run,
-        AgentConfig(),
-        id=f"MontyDynamicAgent-{uuid.uuid4()}",
-        task_queue=task_queue,
-    )
-    script = (
-        "import asyncio\n"
-        "async def main():\n"
-        '    found = await search_flights({"origin": "SFO", "destination": "JFK", "date": "2026-07-01"})\n'
-        '    flight_id = found["flights"][0]["flight_id"]\n'
-        '    seats = await get_seat_map({"flight_id": flight_id})\n'
-        '    business = [s for s in seats["open_seats"] if s["cabin"] == "business"][0]\n'
-        '    return await book_flight({"flight_id": flight_id, "passenger_name": "Ada Lovelace",\n'
-        '                              "fare": "economy", "seat": business["seat"]})\n'
-        "asyncio.run(main())"
-    )
-    await handle.execute_update(
-        SEND_AGENT_MESSAGE_UPDATE,
-        AgentMessage(type="run_script", payload={"script": script}),
-        result_type=AgentMessageReply,
-    )
-
-    reply = await _reply_text(client, handle.id)
-    assert "is in business, not economy" in reply
 
 
 async def test_script_syntax_error_is_reported(client_and_queue):
@@ -162,3 +138,50 @@ async def test_script_syntax_error_is_reported(client_and_queue):
 
     reply = await _reply_text(client, handle.id)
     assert "Script error" in reply
+
+
+async def _run_script_reply(client, task_queue, script: str) -> str:
+    handle = await client.start_workflow(
+        MontyDynamicAgentWorkflow.run,
+        AgentConfig(),
+        id=f"MontyDynamicAgent-{uuid.uuid4()}",
+        task_queue=task_queue,
+    )
+    await handle.execute_update(
+        SEND_AGENT_MESSAGE_UPDATE,
+        AgentMessage(type="run_script", payload={"script": script}),
+        result_type=AgentMessageReply,
+    )
+    return await _reply_text(client, handle.id)
+
+
+def _select_seat_script(seat_cabin: str, claimed_fare: str) -> str:
+    """Books economy on the first SFO→JFK flight, then asks for a `seat_cabin` seat on it,
+    giving the booking's fare as `claimed_fare`."""
+    return (
+        "import asyncio\n"
+        "async def main():\n"
+        '    found = await search_flights({"origin": "SFO", "destination": "JFK", "date": "2026-07-01"})\n'
+        '    flight_id = found["flights"][0]["flight_id"]\n'
+        '    booked = await book_flight({"flight_id": flight_id, "passenger_name": "Ada Lovelace"})\n'
+        '    seats = await get_seat_map({"flight_id": flight_id})\n'
+        f'    seat = [s for s in seats["open_seats"] if s["cabin"] == "{seat_cabin}"][0]\n'
+        '    return await select_seat({"confirmation_code": booked["confirmation_code"],\n'
+        '                              "flight_id": flight_id, "passenger_name": "Ada Lovelace",\n'
+        f'                              "fare": "{claimed_fare}", "seat": seat["seat"]}})\n'
+        "asyncio.run(main())"
+    )
+
+
+async def test_a_seat_outside_the_fares_cabin_is_refused(client_and_queue):
+    client, task_queue = client_and_queue
+    script = _select_seat_script(seat_cabin="business", claimed_fare="economy")
+    reply = await _run_script_reply(client, task_queue, script)
+    assert "is in business, not economy" in reply
+
+
+async def test_a_seat_for_a_booking_that_does_not_match_is_refused(client_and_queue):
+    client, task_queue = client_and_queue
+    script = _select_seat_script(seat_cabin="premium", claimed_fare="premium")
+    reply = await _run_script_reply(client, task_queue, script)
+    assert "use the details book_flight returned" in reply

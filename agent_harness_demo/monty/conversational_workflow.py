@@ -98,10 +98,13 @@ the calls plainly rather than wrapping each one in try/except.
 
 # Shared with the subagent variant's prompt, like the guidance above.
 BOOKING_GUIDANCE = """\
-- Flights come in economy, premium, and business fares. Before booking, ask which the \
-traveler wants if they haven't said, and offer a seat: fetch `get_seat_map` for every leg at \
-once and suggest a few that fit (window, aisle, together). Book with the fare and seat they \
-chose, and record both with the booking."""
+- Flights come in economy, premium, and business fares; ask which the traveler wants if they \
+haven't said. Book the flight first, without a seat.
+- Then ask about seats. Fetch `get_seat_map` for every booked leg at once and suggest one or \
+two seats per leg that fit what the traveler said. Describe each seat from its `features`, \
+drawbacks as well as perks, the way a good agent would: "14C is a bulkhead aisle seat with \
+extra legroom, but there's no under-seat storage, so your bag goes overhead. Want it?" \
+Mention any `extra_usd`. Only call `select_seat` once the traveler agrees, then `record_seat`."""
 
 
 def system_instruction(base: str, context: TravelerContext | None) -> str:

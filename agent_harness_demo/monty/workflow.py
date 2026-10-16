@@ -103,15 +103,20 @@ class MontyDynamicAgentWorkflow:
                 ("economy" | "premium" | "business"), each with ``price_usd`` and ``changeable``.
           • ``get_seat_map({"flight_id": str}) -> dict``
                 Returns ``{"flight_id": str, "open_seats": [seat, ...]}``, each seat: ``seat``
-                ("14C"), ``cabin`` (a fare level), ``extra_usd`` (exit rows cost extra).
+                ("14C"), ``cabin`` (a fare level), ``extra_usd`` (exit rows cost extra), and
+                ``features``: what the seat is like, drawbacks included ("window", "exit row",
+                "extra legroom", "no under-seat storage", "limited recline", ...).
           • ``search_hotels({"city": str, "check_in": str, "check_out": str}) -> dict``
                 Returns ``{"hotels": [hotel, ...]}``, each hotel: ``hotel_id``, ``name``,
                 ``star_rating`` (int), ``price_per_night_usd`` (float), ``neighborhood`` (str).
-          • ``book_flight({"flight_id": str, "passenger_name": str, "fare": str, "seat": str})
-            -> dict``
-                ``fare`` defaults to "economy"; ``seat`` is optional and must be open and in the
-                fare's cabin. Returns ``confirmation_code``, ``flight_id``, ``passenger_name``,
-                ``fare``, ``seat``, ``price_usd`` (fare plus any seat charge), ``status``.
+          • ``book_flight({"flight_id": str, "passenger_name": str, "fare": str}) -> dict``
+                ``fare`` defaults to "economy". Returns ``confirmation_code``, ``flight_id``,
+                ``passenger_name``, ``fare``, ``price_usd``, ``status``.
+          • ``select_seat({"confirmation_code": str, "flight_id": str, "passenger_name": str,
+            "fare": str, "seat": str}) -> dict``
+                Chooses an open seat in the fare's cabin on a booked flight; pass the booking's
+                details as ``book_flight`` returned them. Returns ``confirmation_code``, ``seat``,
+                ``features``, ``extra_usd``, ``status``.
           • ``book_hotel({"hotel_id": str, "guest_name": str}) -> dict``
                 Returns ``confirmation_code``, ``hotel_id``, ``guest_name``, ``status``.
 
@@ -127,10 +132,11 @@ class MontyDynamicAgentWorkflow:
                 Puts a trip on the board and returns its ``trip_id``. ``tasks`` is the starting
                 checklist; omit or leave empty for the standard one.
           • ``record_booking({"trip_id": str, "kind": "flight"|"hotel", "confirmation_code": str,
-            "detail": str, "price_usd": float, "fare": str, "seat": str, "completes": [str, ...]})
-            -> dict``
+            "detail": str, "price_usd": float, "fare": str, "completes": [str, ...]}) -> dict``
                 Records a booking and ticks off the checklist items it finishes, in one commit.
                 Use a confirmation code a booking call actually returned.
+          • ``record_seat({"trip_id": str, "confirmation_code": str, "seat": str}) -> dict``
+                Records the seat ``select_seat`` gave a recorded flight.
           • ``complete_trip_tasks({"trip_id": str, "tasks": [str, ...]}) -> dict``
                 Ticks items off by their text (exact, or a distinctive part of it).
           • ``add_trip_tasks({"trip_id": str, "tasks": [str, ...]}) -> dict``
@@ -154,13 +160,10 @@ class MontyDynamicAgentWorkflow:
                     search_hotels({"city": "New York", "check_in": "2026-07-01", "check_out": "2026-07-05"}),
                 )
                 cheapest = min(flights["flights"], key=lambda f: f["price_usd"])
-                seats = await get_seat_map({"flight_id": cheapest["flight_id"]})
-                aisle = [s for s in seats["open_seats"] if s["cabin"] == "economy" and s["seat"][-1] in "CD"]
                 flight = await book_flight({
                     "flight_id": cheapest["flight_id"],
                     "passenger_name": "Ada Lovelace",
                     "fare": "economy",
-                    "seat": aisle[0]["seat"],
                 })
                 await record_booking({
                     "trip_id": trip["trip_id"],
@@ -170,8 +173,21 @@ class MontyDynamicAgentWorkflow:
                               f"{cheapest['departure_time']}-{cheapest['arrival_time']}",
                     "price_usd": flight["price_usd"],
                     "fare": flight["fare"],
-                    "seat": flight["seat"],
                     "completes": ["outbound flight"],
+                })
+                seats = await get_seat_map({"flight_id": cheapest["flight_id"]})
+                aisle = [s for s in seats["open_seats"] if s["cabin"] == "economy" and "aisle" in s["features"]]
+                chosen = await select_seat({
+                    "confirmation_code": flight["confirmation_code"],
+                    "flight_id": flight["flight_id"],
+                    "passenger_name": flight["passenger_name"],
+                    "fare": flight["fare"],
+                    "seat": aisle[0]["seat"],
+                })
+                await record_seat({
+                    "trip_id": trip["trip_id"],
+                    "confirmation_code": flight["confirmation_code"],
+                    "seat": chosen["seat"],
                 })
                 return await read_trip_board()
             asyncio.run(main())
