@@ -16,7 +16,7 @@ from temporal_agent_harness.plugin import AgentHarnessPlugin
 from agent_harness_demo import config, web
 from tests.temporal_env import start_workflow_environment
 
-CHAT_AGENT = "MontyChatAgent"
+CHAT_AGENT = "ZiggyChatAgent"
 
 
 @pytest_asyncio.fixture(scope="module")

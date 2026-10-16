@@ -1,7 +1,7 @@
 [project]
 name = "temporal-demo-agent-harness"
 version = "0.1.0"
-description = "Monty, a durable travel agent on the Temporal Agent Harness, packaged for the tmprl-demo.cloud catalog."
+description = "Ziggy, a durable travel agent on the Temporal Agent Harness, packaged for the tmprl-demo.cloud catalog."
 requires-python = ">=3.12"
 dependencies = [
     "temporal-agent-harness[genai,code-mode,ui,s3]==0.6.0",

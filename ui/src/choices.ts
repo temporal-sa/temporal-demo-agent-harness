@@ -1,7 +1,7 @@
 import type { ToolPart } from "@temporalio/agent-harness-client";
 import { usd } from "./format.ts";
 
-/** The callback tools Monty uses to ask the traveler to pick between trip options or hotels. */
+/** The callback tools Ziggy uses to ask the traveler to pick between trip options or hotels. */
 export const CHOICE_TOOL = "ask_traveler_to_choose";
 export const HOTEL_TOOL = "ask_traveler_to_choose_hotel";
 export const isChoiceTool = (name: string) => name === CHOICE_TOOL || name === HOTEL_TOOL;

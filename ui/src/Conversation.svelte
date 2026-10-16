@@ -4,9 +4,9 @@
   import { choiceRequest, choiceSummary, isChoiceTool } from "./choices.ts";
   import Code from "./Code.svelte";
   import Markdown from "./Markdown.svelte";
-  import type { MontyChatAgent } from "./generated/MontyChatAgent.ts";
+  import type { ZiggyChatAgent } from "./generated/ZiggyChatAgent.ts";
 
-  type Message = HarnessMessage<MontyChatAgent>;
+  type Message = HarnessMessage<ZiggyChatAgent>;
   /** A message's parts in the order they streamed, with adjacent text deltas joined. */
   type Segment =
     | { kind: "text"; text: string }
@@ -167,7 +167,7 @@
 
           {#each segments(message) as segment, i (i)}
             {#if segment.kind === "text"}
-              <div class="monty"><Markdown source={segment.text} /></div>
+              <div class="ziggy"><Markdown source={segment.text} /></div>
             {:else if segment.kind === "thought"}
               <p class="thought">{segment.text}</p>
             {:else if segment.kind === "tools"}
@@ -188,7 +188,7 @@
                   <span class="badge progress">thinking</span>
                   <span class="mono thinking">{call.model ?? "model"} · {clock(ms)}</span>
                   {#if ms >= SLOW_MS}
-                    <span class="muted">· Gemini is taking a while to respond. Monty's Workflow is waiting on it, durably.</span>
+                    <span class="muted">· Gemini is taking a while to respond. Ziggy's Workflow is waiting on it, durably.</span>
                   {/if}
                 {:else}
                   <span class="badge idle">model call</span>
@@ -246,9 +246,9 @@
           {#if message.status === "sending"}
             <p class="muted">Sending…</p>
           {:else if message.status === "accepted"}
-            <p class="muted">Received. Monty will pick it up in order.</p>
+            <p class="muted">Received. Ziggy will pick it up in order.</p>
           {:else if message.status === "running" && message.parts.length === 0}
-            <p class="muted thinking">Monty is working…</p>
+            <p class="muted thinking">Ziggy is working…</p>
           {/if}
           {#if message.status === "error" && message.error}
             <p class="failure">{message.error}</p>

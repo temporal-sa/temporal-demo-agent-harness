@@ -4,7 +4,7 @@
 # batch loop, host-call dispatch via run_tool (coercion + result marshalling + tool lifecycle),
 # pre-run type checking, and replay — is exercised against real activities under a WorkflowEnvironment.
 #
-# Run with: uv run pytest tests/agent_harness_demo/monty/test_code_mode_e2e.py -v
+# Run with: uv run pytest tests/ziggy/test_code_mode_e2e.py -v
 
 from __future__ import annotations
 

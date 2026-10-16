@@ -12,7 +12,7 @@ from temporalio.envconfig import ClientConfig
 
 from temporal_agent_harness.utils.large_payload import local_payload_storage, s3_payload_storage
 
-REGISTRY_PATH = Path(__file__).parent / "monty" / "agents.toml"
+REGISTRY_PATH = Path(__file__).parent / "ziggy" / "agents.toml"
 
 # The catalog injects a per-workspace queue (`agent-harness-<workspace>`) into every
 # component through this variable; see `crashable.taskQueueEnv` in the DemoProject.

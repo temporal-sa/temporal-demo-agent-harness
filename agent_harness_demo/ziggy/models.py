@@ -1,4 +1,4 @@
-"""Message and start types for the Monty agents.
+"""Message and start types for the Ziggy agents.
 
 NB: no ``from __future__ import annotations`` here — these cross Temporal's pydantic
 converter, and stringized annotations leave the discriminated-union machinery "not fully

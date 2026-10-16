@@ -1,5 +1,5 @@
 /**
- * Just enough Markdown for Monty's replies: headings, lists, rules, and bold, italic, and
+ * Just enough Markdown for Ziggy's replies: headings, lists, rules, and bold, italic, and
  * code spans. It returns plain data for the template to render, never HTML, so nothing a
  * model writes can become markup on the page.
  */

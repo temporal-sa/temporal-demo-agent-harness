@@ -67,7 +67,7 @@ DEFAULT_NEIGHBORHOODS = ["Downtown", "City Center", "Old Town", "Waterfront", "A
 # Per-activity execution ceiling. Trivial for these simulated calls, but a real host
 # function might do meaningful I/O; tune per tool if that ever matters. Lives on each
 # tool's decorator now (the in-workflow approval/dispatch logic, if any, runs outside it).
-_MONTY_ACTIVITY_TIMEOUT = timedelta(seconds=30)
+_TRAVEL_ACTIVITY_TIMEOUT = timedelta(seconds=30)
 
 # Cabins by row, with the seat letters in each row. Economy exit rows cost extra.
 CABINS: dict[FareLevel, tuple[range, str]] = {
@@ -184,7 +184,7 @@ def _require_flight(flight_id: str) -> None:
 
 @agent.activity_tool_defn(
     name="search_flights",
-    activity_config=ActivityConfig(start_to_close_timeout=_MONTY_ACTIVITY_TIMEOUT),
+    activity_config=ActivityConfig(start_to_close_timeout=_TRAVEL_ACTIVITY_TIMEOUT),
 )
 async def search_flights_activity(request: FlightSearchRequest) -> FlightSearchResponse:
     """Search for available flights between two airports on a given date."""
@@ -207,7 +207,7 @@ async def search_flights_activity(request: FlightSearchRequest) -> FlightSearchR
 
 @agent.activity_tool_defn(
     name="get_seat_map",
-    activity_config=ActivityConfig(start_to_close_timeout=_MONTY_ACTIVITY_TIMEOUT),
+    activity_config=ActivityConfig(start_to_close_timeout=_TRAVEL_ACTIVITY_TIMEOUT),
 )
 async def get_seat_map_activity(request: SeatMapRequest) -> SeatMapResponse:
     """List the open seats on a flight, by cabin, with any extra charge for each."""
@@ -222,7 +222,7 @@ async def get_seat_map_activity(request: SeatMapRequest) -> SeatMapResponse:
 
 @agent.activity_tool_defn(
     name="search_hotels",
-    activity_config=ActivityConfig(start_to_close_timeout=_MONTY_ACTIVITY_TIMEOUT),
+    activity_config=ActivityConfig(start_to_close_timeout=_TRAVEL_ACTIVITY_TIMEOUT),
 )
 async def search_hotels_activity(request: HotelSearchRequest) -> HotelSearchResponse:
     """Search for available hotels in a city for the given date range."""
@@ -258,7 +258,7 @@ async def search_hotels_activity(request: HotelSearchRequest) -> HotelSearchResp
 
 @agent.activity_tool_defn(
     name="book_flight",
-    activity_config=ActivityConfig(start_to_close_timeout=_MONTY_ACTIVITY_TIMEOUT),
+    activity_config=ActivityConfig(start_to_close_timeout=_TRAVEL_ACTIVITY_TIMEOUT),
 )
 async def book_flight_activity(request: FlightBookingRequest) -> FlightBookingResponse:
     """Book a flight at a fare level and return a confirmation code. Choose a seat afterward
@@ -284,7 +284,7 @@ async def book_flight_activity(request: FlightBookingRequest) -> FlightBookingRe
 
 @agent.activity_tool_defn(
     name="select_seat",
-    activity_config=ActivityConfig(start_to_close_timeout=_MONTY_ACTIVITY_TIMEOUT),
+    activity_config=ActivityConfig(start_to_close_timeout=_TRAVEL_ACTIVITY_TIMEOUT),
 )
 async def select_seat_activity(request: SeatSelectionRequest) -> SeatSelectionResponse:
     """Choose an open seat in the fare's cabin on a flight already booked. Returns the seat's
@@ -313,7 +313,7 @@ async def select_seat_activity(request: SeatSelectionRequest) -> SeatSelectionRe
 
 @agent.activity_tool_defn(
     name="book_hotel",
-    activity_config=ActivityConfig(start_to_close_timeout=_MONTY_ACTIVITY_TIMEOUT),
+    activity_config=ActivityConfig(start_to_close_timeout=_TRAVEL_ACTIVITY_TIMEOUT),
 )
 async def book_hotel_activity(request: HotelBookingRequest) -> HotelBookingResponse:
     """Book a specific hotel for a guest and return a confirmation code."""

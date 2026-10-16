@@ -1,5 +1,5 @@
 import { HttpTransport, startSession, type SessionSummary } from "@temporalio/agent-harness-client";
-import { MontyChatAgent, type TravelerContext } from "./generated/MontyChatAgent.ts";
+import { ZiggyChatAgent, type TravelerContext } from "./generated/ZiggyChatAgent.ts";
 
 /** One transport for the page, against the same `api/` the console uses. */
 export const transport = new HttpTransport();
@@ -25,7 +25,7 @@ export function newSessionId(prefix: string): string {
   return prefix + Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-/** The traveler's local date and time zone, so Monty plans from today rather than from
+/** The traveler's local date and time zone, so Ziggy plans from today rather than from
  *  whenever its model was trained. */
 export function travelerContext(now = new Date()): TravelerContext {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -36,5 +36,5 @@ export function travelerContext(now = new Date()): TravelerContext {
 }
 
 export function createTrip(sessionId: string): Promise<SessionSummary> {
-  return startSession(transport, MontyChatAgent, { sessionId, data: travelerContext() });
+  return startSession(transport, ZiggyChatAgent, { sessionId, data: travelerContext() });
 }

@@ -1,5 +1,5 @@
 import type { AgentView, ToolPart } from "@temporalio/agent-harness-client";
-import type { TripBoard } from "./generated/MontyChatAgent.ts";
+import type { TripBoard } from "./generated/ZiggyChatAgent.ts";
 
 /** Where one flight or hotel stands, from its first search to its confirmation. */
 export type Stage = "searching" | "options" | "clearance" | "boarding" | "confirmed" | "declined" | "failed";
@@ -29,7 +29,7 @@ const RANK: Record<Stage, number> = {
   declined: 0, failed: 1, options: 2, searching: 3, clearance: 4, boarding: 5, confirmed: 6,
 };
 
-/** Two-letter codes for the airlines Monty's simulated backend books, as a departure board
+/** Two-letter codes for the airlines Ziggy's simulated backend books, as a departure board
  *  would show them. Anything else shows its first two letters. */
 const AIRLINE_CODES: Record<string, string> = {
   "American": "AA", "American Airlines": "AA", "Alaska": "AS", "Delta": "DL", "Delta Air Lines": "DL", "United": "UA",
@@ -46,7 +46,7 @@ function airlineCode(detail: string): string {
   return known ? AIRLINE_CODES[known] : detail.replace(/[^A-Za-z]/g, "").slice(0, 2).toUpperCase();
 }
 
-/** `FL-SFOJFK-20261103-003` → origin, destination, date, and number, the shape Monty's
+/** `FL-SFOJFK-20261103-003` → origin, destination, date, and number, the shape Ziggy's
  *  simulated backend issues. IDs from before dates were added, `FL-SFOJFK-003`, have no date. */
 const FLIGHT_ID = /FL-([A-Z]{3})([A-Z]{3})-(?:(\d{4})(\d{2})(\d{2})-)?(\d+)/;
 
@@ -156,7 +156,7 @@ export function departures(agents: readonly AgentView[], board: TripBoard | unde
   }
 
   // A board record finds the row its booking call made by confirmation code, which every
-  // record carries, rather than by the ID Monty may or may not have written into its detail.
+  // record carries, rather than by the ID Ziggy may or may not have written into its detail.
   const byCode = (code: string) => [...rows.values()].find((row) => row.code && row.code === code);
 
   // The trip board is the record: its bookings are confirmed whatever the tool calls say.

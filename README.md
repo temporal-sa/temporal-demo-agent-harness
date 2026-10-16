@@ -1,10 +1,12 @@
-# Agent Harness: Monty the travel agent
+# Agent Harness: Ziggy the travel agent
 
-Monty is a conversational travel agent built on the [Temporal Agent Harness](https://github.com/temporal-community/temporal-agent-harness). You ask for a trip, and the model writes a short Python script that runs in a [pydantic-monty](https://pypi.org/project/pydantic-monty/) sandbox. Each flight or hotel search, seat map, and booking in that script is a durable Temporal Activity, and each tool call waits for your approval. Flights come in economy, premium, and business fares. When Monty has options to offer, it shows them as cards in your browser and waits for you to pick one: that question is a harness callback tool, answered by the page rather than a worker, and the Workflow holds it durably until you choose. After booking, Monty offers seats from the flight's seat map, with each seat's perks and drawbacks. The trip board shows what's booked and what's left, and it updates as the bookings land.
+Ziggy is a conversational travel agent built on the [Temporal Agent Harness](https://github.com/temporal-community/temporal-agent-harness). You ask for a trip, and the model writes a short Python script that runs in a [pydantic-monty](https://pypi.org/project/pydantic-monty/) sandbox. Each flight or hotel search, seat map, and booking in that script is a durable Temporal Activity, and each tool call waits for your approval. Flights come in economy, premium, and business fares. When Ziggy has options to offer, it shows them as cards in your browser and waits for you to pick one: that question is a harness callback tool, answered by the page rather than a worker, and the Workflow holds it durably until you choose. After booking, Ziggy offers seats from the flight's seat map, with each seat's perks and drawbacks. The trip board shows what's booked and what's left, and it updates as the bookings land.
 
 Because the conversation is a Workflow, you can kill the worker in the middle of a booking. When a worker comes back, the agent carries on from the same step, with the same approvals and the same trip board.
 
 This repository is the tmprl-demo.cloud catalog version of the harness's [Monty example](https://github.com/temporal-community/temporal-agent-harness/tree/0.6.0/examples/monty). It replaces the adapter in the registry repo (`deployments/monty/`), which downloaded a pinned upstream tarball and patched it during the image build.
+
+The upstream example names its agent Monty, after the sandbox. Here the agent is Ziggy, Temporal's mascot, so "Monty" only ever means the pydantic-monty sandbox that runs the scripts.
 
 ## The demo
 
@@ -15,11 +17,11 @@ The app has two views of the same sessions, and each links to the other with the
 
 1. Open the app. It starts a trip, or resumes your most recent one.
 2. Ask: *"Book me a flight from SFO to JFK on November 3 and a hotel for three nights. Traveler is Ada Lovelace."*
-3. Pick an itinerary and fare from the option cards, then approve each card as it appears: the script Monty wrote, then each search and booking that script makes. Bookings land on the departures board as they happen.
+3. Pick an itinerary and fare from the option cards, then approve each card as it appears: the script Ziggy wrote, then each search and booking that script makes. Bookings land on the departures board as they happen.
 4. In a crashable workspace, choose **Crash Workers** while a booking is in progress. The page stays up and says the worker isn't answering. When the replacement worker starts, the turn finishes where it stopped.
 5. Open **Harness console** to show the same turn as events and state flow, or **Temporal UI** to show the Workflow history.
 
-The console can also start **Monty (Conversational, Subagent)**, which hands each script to a separate script-runner agent running as a child Workflow. The demo view shows that variant's trip board from the subagent.
+The console can also start **Ziggy (Conversational, Subagent)**, which hands each script to a separate script-runner agent running as a child Workflow. The demo view shows that variant's trip board from the subagent.
 
 ## Run it locally
 
@@ -33,7 +35,7 @@ uv run python -m agent_harness_demo worker     # terminal 1
 uv run python -m agent_harness_demo web        # terminal 2, then open http://localhost:8000
 ```
 
-To see the demo view without a Gemini key, play a scripted trip through a script-only Monty agent. The Workflow, Activities, approvals, trip board, map, and departures board all run as usual; only the model's replies are missing:
+To see the demo view without a Gemini key, play a scripted trip through a script-only Ziggy agent. The Workflow, Activities, approvals, trip board, map, and departures board all run as usual; only the model's replies are missing:
 
 ```bash
 uv run python -m scripts.preview_trip                 # asks before each search and booking
@@ -56,12 +58,12 @@ Run the tests with `uv run pytest`. They start their own dev server and need no 
 
 ```
 agent_harness_demo/
-  monty/        the agents, their tools, and the trip board (copied from the harness's Monty example)
+  ziggy/        the agents, their tools, and the trip board (copied from the harness's Monty example)
   web.py        the browser API and both views, scoped to the signed-in person
   worker.py     one worker for all three agent Workflows and their Activities
   config.py     environment settings shared by both processes
 ui/                         the demo view: Svelte 5 on @temporalio/agent-harness-svelte
-  src/generated/            TypeScript types for MontyChatAgent, generated from the Python class
+  src/generated/            TypeScript types for ZiggyChatAgent, generated from the Python class
 deploy/agent-harness.yaml   draft DemoProject for the registry
 ```
 
@@ -70,10 +72,10 @@ The harness comes from PyPI, pinned to `temporal-agent-harness==0.6.0`. The cons
 When the agent's handlers or `TripBoard` change, regenerate the types. The generator ships in the harness repo, not on npm:
 
 ```bash
-uv run temporal-agent-harness schema agent_harness_demo.monty.conversational_workflow:MontyChatAgentWorkflow > /tmp/monty.json
+uv run temporal-agent-harness schema agent_harness_demo.ziggy.conversational_workflow:ZiggyChatAgentWorkflow > /tmp/ziggy.json
 # in a checkout of temporal-agent-harness at the pinned tag:
 (cd packages/codegen && npm ci && npm run build)
-node packages/codegen/dist/src/cli.js /tmp/monty.json -o <this repo>/ui/src/generated/MontyChatAgent.ts
+node packages/codegen/dist/src/cli.js /tmp/ziggy.json -o <this repo>/ui/src/generated/ZiggyChatAgent.ts
 ```
 
 Changes from the upstream example:

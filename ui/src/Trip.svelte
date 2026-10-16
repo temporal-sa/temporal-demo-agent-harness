@@ -1,6 +1,6 @@
 <script lang="ts">
   import { AgentSession } from "@temporalio/agent-harness-svelte";
-  import type { MontyChatAgent, TripBoard as Board } from "./generated/MontyChatAgent.ts";
+  import type { ZiggyChatAgent, TripBoard as Board } from "./generated/ZiggyChatAgent.ts";
   import ApprovalQueue from "./ApprovalQueue.svelte";
   import ChoiceCards from "./ChoiceCards.svelte";
   import { isChoiceTool } from "./choices.ts";
@@ -14,13 +14,13 @@
 
   let { sessionId }: { sessionId: string } = $props();
 
-  const agent = new AgentSession<MontyChatAgent>({
+  const agent = new AgentSession<ZiggyChatAgent>({
     get sessionId() {
       return sessionId;
     },
   });
 
-  // The board lives on whichever agent in the tree runs the scripts: the root for Monty
+  // The board lives on whichever agent in the tree runs the scripts: the root for Ziggy
   // (Conversational), its script-runner subagent for the subagent variant.
   const board = $derived(
     agent.states.trip_board ??
@@ -40,7 +40,7 @@
   const model: Model = $derived(latest("set_model")?.input.model ?? MODELS[0]);
   const policy: Policy | null = $derived(latest("set_approval_policy")?.input.new_policy ?? null);
 
-  // The page can't see a worker die: the stream just goes quiet. Monty's travel calls take a
+  // The page can't see a worker die: the stream just goes quiet. Ziggy's travel calls take a
   // few seconds, so one still running well past that means no worker is answering. Temporal
   // retries it on the next worker once its 30-second start-to-close timeout passes.
   const STALLED_MS = 12_000;
@@ -73,7 +73,7 @@
   // means no worker is answering.
   //
   // Except while a model call runs: the model can be silent for minutes, and a quiet stream
-  // is then just Monty thinking (the chat says so). Past the Gemini activity's 3-minute
+  // is then just Ziggy thinking (the chat says so). Past the Gemini activity's 3-minute
   // start-to-close timeout, a call still showing as running does mean no worker finished it.
   const MODEL_TIMEOUT_MS = 200_000;
   let modelSince = $state<number | null>(null);
@@ -108,7 +108,7 @@
   });
 
   const rows = $derived(departures(Object.values(agent.agents), board));
-  // Choices waiting on the traveler, from Monty or any subagent, take over the chat column
+  // Choices waiting on the traveler, from Ziggy or any subagent, take over the chat column
   // until they're answered; the chat comes back, scrolled to the newest, once they are.
   const choices = $derived(agent.pendingCallbacks.filter((c) => isChoiceTool(c.part.toolName)));
   const still = $derived(motion.paused || motion.reduced);
@@ -136,8 +136,8 @@
       <div class="card recovering" role="status">
         <span class="badge progress">reconnecting</span>
         <p>
-          Monty's worker isn't answering right now. Everything Monty has already accepted, including
-          the trip, the conversation, and any approvals, is saved in Temporal. Monty carries on from
+          Ziggy's worker isn't answering right now. Everything Ziggy has already accepted, including
+          the trip, the conversation, and any approvals, is saved in Temporal. Ziggy carries on from
           the same step once a worker is running, and picks up a message that's still sending.
         </p>
       </div>
@@ -178,7 +178,7 @@
       />
 
       <form class="composer" onsubmit={send}>
-        <label class="visually-hidden" for="composer">Message Monty</label>
+        <label class="visually-hidden" for="composer">Message Ziggy</label>
         <textarea
           id="composer"
           rows="2"

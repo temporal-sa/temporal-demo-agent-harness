@@ -1,4 +1,4 @@
-# ABOUTME: End-to-end test that the Monty trip board's OBSERVABLE state reaches a consumer
+# ABOUTME: End-to-end test that the Ziggy trip board's OBSERVABLE state reaches a consumer
 # intact. One Code Mode script drives the board through the moves a real turn makes — open a
 # trip, book a flight, record it, tick a task off — and the assertions are the consumer's side
 # of the bargain: one snapshot at registration, one patch per committed mutate() block, and a
@@ -9,7 +9,7 @@
 # would only prove it agrees with itself; a third-party RFC 6902 implementation is what makes
 # "any consumer can do this" a claim and not an assumption.
 #
-# Run with: uv run pytest tests/agent_harness_demo/monty/test_observable_trip_board.py -v
+# Run with: uv run pytest tests/ziggy/test_observable_trip_board.py -v
 
 from __future__ import annotations
 
@@ -36,9 +36,9 @@ from temporal_agent_harness.harness.agent_protocol import (
 )
 from temporal_agent_harness.plugin import AgentHarnessPlugin
 
-from agent_harness_demo.monty import activities
-from agent_harness_demo.monty.trip_board import DEFAULT_TASKS
-from agent_harness_demo.monty.workflow import MontyDynamicAgentWorkflow
+from agent_harness_demo.ziggy import activities
+from agent_harness_demo.ziggy.trip_board import DEFAULT_TASKS
+from agent_harness_demo.ziggy.workflow import ZiggyDynamicAgentWorkflow
 
 # One script, exercising every board tool a booking turn touches: open_trip (an `add` to a list),
 # record_booking (a booking and the tasks it closes in ONE commit), and complete_trip_tasks (a
@@ -71,11 +71,11 @@ async def client_and_queue():
     env = await start_workflow_environment(
         data_converter=pydantic_data_converter
     )
-    task_queue = f"monty-board-test-{uuid.uuid4()}"
+    task_queue = f"ziggy-board-test-{uuid.uuid4()}"
     async with Worker(
         env.client,
         task_queue=task_queue,
-        workflows=[MontyDynamicAgentWorkflow],
+        workflows=[ZiggyDynamicAgentWorkflow],
         plugins=[AgentHarnessPlugin(tools=activities.ALL_TOOLS)],
     ):
         try:
@@ -87,9 +87,9 @@ async def client_and_queue():
 async def _run_script(client: Client, task_queue: str, script: str) -> list[AgentEvent]:
     """Run one script turn and return every turn_events envelope, in order."""
     handle = await client.start_workflow(
-        MontyDynamicAgentWorkflow.run,
+        ZiggyDynamicAgentWorkflow.run,
         AgentConfig(),
-        id=f"MontyDynamicAgent-{uuid.uuid4()}",
+        id=f"ZiggyDynamicAgent-{uuid.uuid4()}",
         task_queue=task_queue,
     )
     await handle.execute_update(

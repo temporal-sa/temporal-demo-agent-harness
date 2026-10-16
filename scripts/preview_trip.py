@@ -1,6 +1,6 @@
 """Play a whole trip through the demo view without a model or an API key.
 
-Starts a script-only Monty session (MontyDynamicAgent) as the local dev user and sends it one
+Starts a script-only Ziggy session (ZiggyDynamicAgent) as the local dev user and sends it one
 script that plans a multi-city trip: searches run in parallel, two itineraries appear as cards
 for the traveler to pick (a callback tool, answered in the browser), then each booking lands
 on the trip board. Every search and booking waits for approval in the demo view, as it would with
@@ -24,8 +24,8 @@ from temporal_agent_harness.harness.agent_protocol import AgentConfig, ToolAppro
 from temporal_agent_harness.plugin import AgentHarnessPlugin
 
 from agent_harness_demo import config
-from agent_harness_demo.monty.choices import CHOICE_TOOL_NAMES
-from agent_harness_demo.monty.trip_board import BOARD_TOOL_NAMES
+from agent_harness_demo.ziggy.choices import CHOICE_TOOL_NAMES
+from agent_harness_demo.ziggy.trip_board import BOARD_TOOL_NAMES
 from agent_harness_demo.web import DEV_USER, prefix_for
 
 SCRIPT = """
@@ -147,7 +147,7 @@ async def main(approvals: bool) -> None:
     )
     session_id = prefix_for(DEV_USER) + "preview-" + secrets.token_hex(3)
     await client.start_workflow(
-        "MontyDynamicAgent",
+        "ZiggyDynamicAgent",
         AgentConfig(approval_policy=policy),
         id=session_id,
         task_queue=config.TASK_QUEUE,

@@ -1,4 +1,4 @@
-# ABOUTME: End-to-end test for the Monty dynamic agent against the time-skipping test
+# ABOUTME: End-to-end test for the Ziggy dynamic agent against the time-skipping test
 # server. Sends a RunScript whose script calls BOTH host functions (each backed by a
 # durable activity) and asserts the reply carries the script's stdout + final value.
 #
@@ -6,7 +6,7 @@
 # workflow runner, so a pass means the pydantic-monty interpreter both imports through
 # the Temporal sandbox AND drives external async host functions across activity awaits.
 #
-# Run with: uv run pytest tests/agent_harness_demo/monty/test_workflow.py -v
+# Run with: uv run pytest tests/ziggy/test_workflow.py -v
 
 from __future__ import annotations
 
@@ -31,8 +31,8 @@ from temporal_agent_harness.harness.agent_protocol import (
 
 from temporal_agent_harness.plugin import AgentHarnessPlugin
 
-from agent_harness_demo.monty import activities
-from agent_harness_demo.monty.workflow import MontyDynamicAgentWorkflow
+from agent_harness_demo.ziggy import activities
+from agent_harness_demo.ziggy.workflow import ZiggyDynamicAgentWorkflow
 
 
 @pytest_asyncio.fixture
@@ -40,14 +40,14 @@ async def client_and_queue():
     env = await start_workflow_environment(
         data_converter=pydantic_data_converter
     )
-    task_queue = f"monty-agent-test-{uuid.uuid4()}"
-    # Mirrors agent_harness_demo/monty/worker.py: the harness plugin registers the travel tools' activity
+    task_queue = f"ziggy-agent-test-{uuid.uuid4()}"
+    # Mirrors agent_harness_demo/worker.py: the harness plugin registers the travel tools' activity
     # bodies. (Passed to the Worker rather than the
     # client because the test env's client is already connected.)
     async with Worker(
         env.client,
         task_queue=task_queue,
-        workflows=[MontyDynamicAgentWorkflow],
+        workflows=[ZiggyDynamicAgentWorkflow],
         plugins=[AgentHarnessPlugin(tools=activities.ALL_TOOLS)],
     ):
         try:
@@ -77,9 +77,9 @@ async def _reply_text(client: Client, workflow_id: str) -> str:
 async def test_script_calls_host_functions(client_and_queue):
     client, task_queue = client_and_queue
     handle = await client.start_workflow(
-        MontyDynamicAgentWorkflow.run,
+        ZiggyDynamicAgentWorkflow.run,
         AgentConfig(),
-        id=f"MontyDynamicAgent-{uuid.uuid4()}",
+        id=f"ZiggyDynamicAgent-{uuid.uuid4()}",
         task_queue=task_queue,
     )
 
@@ -125,9 +125,9 @@ async def test_script_calls_host_functions(client_and_queue):
 async def test_script_syntax_error_is_reported(client_and_queue):
     client, task_queue = client_and_queue
     handle = await client.start_workflow(
-        MontyDynamicAgentWorkflow.run,
+        ZiggyDynamicAgentWorkflow.run,
         AgentConfig(),
-        id=f"MontyDynamicAgent-{uuid.uuid4()}",
+        id=f"ZiggyDynamicAgent-{uuid.uuid4()}",
         task_queue=task_queue,
     )
     await handle.execute_update(
@@ -142,9 +142,9 @@ async def test_script_syntax_error_is_reported(client_and_queue):
 
 async def _run_script_reply(client, task_queue, script: str) -> str:
     handle = await client.start_workflow(
-        MontyDynamicAgentWorkflow.run,
+        ZiggyDynamicAgentWorkflow.run,
         AgentConfig(),
-        id=f"MontyDynamicAgent-{uuid.uuid4()}",
+        id=f"ZiggyDynamicAgent-{uuid.uuid4()}",
         task_queue=task_queue,
     )
     await handle.execute_update(

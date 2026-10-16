@@ -1,4 +1,4 @@
-/** Latitude and longitude of the airports the route map can place, by IATA code. Monty's
+/** Latitude and longitude of the airports the route map can place, by IATA code. Ziggy's
  *  travel backend is simulated and accepts any code; the map draws only the ones listed here. */
 export const AIRPORTS: Record<string, [lat: number, lon: number]> = {
   ATL: [33.64, -84.43], AUS: [30.19, -97.67], BNA: [36.12, -86.68], BOS: [42.36, -71.01],

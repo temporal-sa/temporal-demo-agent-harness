@@ -58,12 +58,12 @@ DEFAULT_MODEL = SUPPORTED_MODELS[0]
 
 
 class SetModel(BaseModel):
-    """Which model this Monty session should use for subsequent turns."""
+    """Which model this Ziggy session should use for subsequent turns."""
 
     # A Literal (not a bare str) so the choice is enforced rather than merely suggested:
     # pydantic rejects anything else at the update boundary, and the same constraint shows up
     # as an enum in this handler's `parameters` JSON schema — which is what lets a generic
-    # client render a dropdown without knowing anything about Monty.
+    # client render a dropdown without knowing anything about Ziggy.
     model: Literal[SUPPORTED_MODELS]  # type: ignore[valid-type]
 
 
@@ -137,7 +137,7 @@ def system_instruction(base: str, context: TravelerContext | None) -> str:
     return f"{base}\n\n{context.prompt_line()}"
 
 SYSTEM_INSTRUCTION = f"""\
-You are a friendly travel-booking assistant. You help users search and book flights and \
+You are Ziggy, Temporal's friendly travel-booking assistant. You help users search and book flights and \
 hotels and assemble trip itineraries. You don't have these abilities directly — instead you \
 write small async Python scripts and run them with the `run_travel_code` tool, which exposes the \
 travel operations as async host functions your script calls. The tool's description gives the \
@@ -174,8 +174,8 @@ Board calls are cheap and are not gated on the user's approval — there is noth
 about your own notes — so there is never a reason to batch them up or skip them."""
 
 
-@agent.defn(name="MontyChatAgent")
-class MontyChatAgentWorkflow:
+@agent.defn(name="ZiggyChatAgent")
+class ZiggyChatAgentWorkflow:
     trip_board = agent.state(trip_board.TripBoard)
 
     @agent.init

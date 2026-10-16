@@ -56,7 +56,7 @@
           <h3 class="heading">{toolLabel(group[0].part.toolName)} <span class="count mono">× {group.length}</span></h3>
         </header>
         <p class="muted">
-          Monty's script runs these at the same time, each as its own Temporal Activity. They wait,
+          Ziggy's script runs these at the same time, each as its own Temporal Activity. They wait,
           durably, until you decide.
         </p>
         <div class="actions">

@@ -1,4 +1,4 @@
-"""The worker that runs every Monty agent, their subagents, and their travel activities."""
+"""The worker that runs every Ziggy agent, their subagents, and their travel activities."""
 
 from __future__ import annotations
 
@@ -13,10 +13,10 @@ from temporal_agent_harness.ai_sdks.google_genai_plugin import GoogleGenAIPlugin
 from temporal_agent_harness.plugin import AgentHarnessPlugin
 
 from . import config
-from .monty import activities
-from .monty.conversational_subagent_workflow import MontyChatSubagentWorkflow
-from .monty.conversational_workflow import MontyChatAgentWorkflow
-from .monty.workflow import MontyDynamicAgentWorkflow
+from .ziggy import activities
+from .ziggy.conversational_subagent_workflow import ZiggyChatSubagentWorkflow
+from .ziggy.conversational_workflow import ZiggyChatAgentWorkflow
+from .ziggy.workflow import ZiggyDynamicAgentWorkflow
 
 
 def deployment_config() -> WorkerDeploymentConfig | None:
@@ -55,7 +55,7 @@ async def run() -> None:
     worker = Worker(
         client,
         task_queue=config.TASK_QUEUE,
-        workflows=[MontyChatAgentWorkflow, MontyChatSubagentWorkflow, MontyDynamicAgentWorkflow],
+        workflows=[ZiggyChatAgentWorkflow, ZiggyChatSubagentWorkflow, ZiggyDynamicAgentWorkflow],
         deployment_config=deployment_config(),
     )
     logging.info("Polling %s in namespace %s", config.TASK_QUEUE, client.namespace)

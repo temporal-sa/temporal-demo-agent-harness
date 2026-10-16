@@ -1,4 +1,4 @@
-"""Monty dynamic agent: each turn runs a caller-supplied Python script (no model in the loop).
+"""Ziggy dynamic agent: each turn runs a caller-supplied Python script (no model in the loop).
 
 A deliberately minimal harness agent. Each turn carries an arbitrary Python *script* (see
 :class:`RunScript`) that runs in a sandbox whose only escape hatches are the travel host
@@ -11,7 +11,7 @@ the caller's script straight through it. The script calls the tools as async hos
 each host call runs as a durable, approval-gated activity, and independent calls can run
 concurrently via ``asyncio.gather``.
 
-Contrast with the conversational Monty agent (``conversational_workflow.py``): that one drives
+Contrast with the conversational Ziggy agent (``conversational_workflow.py``): that one drives
 the Gemini Interactions API with a model in the loop, over the same Code Mode tool. This one has
 no model — the script is the input. Both reuse the standard harness contract: ``@agent.defn`` +
 an :class:`AgentWorkflowRunner` built in ``@agent.init``, the turn loop driven by the ``run``
@@ -38,8 +38,8 @@ with workflow.unsafe.imports_passed_through():
     from .models import RunScript
 
 
-@agent.defn(name="MontyDynamicAgent")
-class MontyDynamicAgentWorkflow:
+@agent.defn(name="ZiggyDynamicAgent")
+class ZiggyDynamicAgentWorkflow:
     # There is no model in this agent, so the script is what keeps the board current; see
     # `trip_board.py`.
     trip_board = agent.state(trip_board.TripBoard)

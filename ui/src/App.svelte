@@ -69,7 +69,7 @@
       <img src={logo} alt="Temporal" width="132" height="34" />
       <div>
         <p class="eyebrow">Agent Harness · Code Mode · Human in the loop</p>
-        <h1 class="title">Monty, a <span class="text-gradient-ultraviolet">durable</span> travel agent</h1>
+        <h1 class="title">Ziggy, a <span class="text-gradient-ultraviolet">durable</span> travel agent</h1>
       </div>
     </div>
     <nav class="links" aria-label="Views">

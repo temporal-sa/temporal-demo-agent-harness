@@ -91,7 +91,7 @@
     confirmed: "green", declined: "slate", failed: "red",
   };
 
-  // The caption says which leg Monty is working on, from the same rows as the board.
+  // The caption says which leg Ziggy is working on, from the same rows as the board.
   const active = $derived(flights.findLast((r) => ["searching", "boarding", "clearance"].includes(r.stage)));
   const landed = $derived(flights.findLast((r) => r.stage === "confirmed"));
   const caption = $derived(

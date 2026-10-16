@@ -3,8 +3,8 @@ from datetime import date
 import pytest
 from pydantic import ValidationError
 
-from agent_harness_demo.monty.conversational_workflow import SYSTEM_INSTRUCTION, system_instruction
-from agent_harness_demo.monty.models import TravelerContext
+from agent_harness_demo.ziggy.conversational_workflow import SYSTEM_INSTRUCTION, system_instruction
+from agent_harness_demo.ziggy.models import TravelerContext
 
 
 def test_the_prompt_ends_with_the_travelers_date():

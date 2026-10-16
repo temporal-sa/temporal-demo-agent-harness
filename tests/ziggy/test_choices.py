@@ -25,8 +25,8 @@ from temporal_agent_harness.harness.agent_protocol import (
 )
 from temporal_agent_harness.plugin import AgentHarnessPlugin
 
-from agent_harness_demo.monty import activities
-from agent_harness_demo.monty.workflow import MontyDynamicAgentWorkflow
+from agent_harness_demo.ziggy import activities
+from agent_harness_demo.ziggy.workflow import ZiggyDynamicAgentWorkflow
 from tests.temporal_env import start_workflow_environment
 
 SCRIPT = """
@@ -54,11 +54,11 @@ asyncio.run(main())
 @pytest_asyncio.fixture
 async def client_and_queue():
     env = await start_workflow_environment(data_converter=pydantic_data_converter)
-    task_queue = f"monty-choice-test-{uuid.uuid4()}"
+    task_queue = f"ziggy-choice-test-{uuid.uuid4()}"
     async with Worker(
         env.client,
         task_queue=task_queue,
-        workflows=[MontyDynamicAgentWorkflow],
+        workflows=[ZiggyDynamicAgentWorkflow],
         plugins=[AgentHarnessPlugin(tools=activities.ALL_TOOLS)],
     ):
         try:
@@ -70,9 +70,9 @@ async def client_and_queue():
 async def test_the_travelers_pick_comes_back_to_the_script(client_and_queue):
     client, task_queue = client_and_queue
     handle = await client.start_workflow(
-        MontyDynamicAgentWorkflow.run,
+        ZiggyDynamicAgentWorkflow.run,
         AgentConfig(),
-        id=f"MontyDynamicAgent-{uuid.uuid4()}",
+        id=f"ZiggyDynamicAgent-{uuid.uuid4()}",
         task_queue=task_queue,
     )
     await handle.execute_update(
@@ -126,9 +126,9 @@ asyncio.run(main())
 async def test_the_travelers_hotel_comes_back_to_the_script(client_and_queue):
     client, task_queue = client_and_queue
     handle = await client.start_workflow(
-        MontyDynamicAgentWorkflow.run,
+        ZiggyDynamicAgentWorkflow.run,
         AgentConfig(),
-        id=f"MontyDynamicAgent-{uuid.uuid4()}",
+        id=f"ZiggyDynamicAgent-{uuid.uuid4()}",
         task_queue=task_queue,
     )
     await handle.execute_update(

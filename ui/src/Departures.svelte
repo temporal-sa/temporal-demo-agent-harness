@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { TripBoard } from "./generated/MontyChatAgent.ts";
+  import type { TripBoard } from "./generated/ZiggyChatAgent.ts";
   import { usd } from "./format.ts";
   import SplitFlap from "./SplitFlap.svelte";
   import { isMoving, type Row, type Stage } from "./travel.ts";
@@ -12,7 +12,7 @@
   }: { rows: Row[]; board: TripBoard | undefined; away: boolean; still: boolean } = $props();
 
   const STATUS: Record<Stage, { text: string; tone: string; meaning: string }> = {
-    searching: { text: "SEARCHING", tone: "cyan", meaning: "Monty is searching" },
+    searching: { text: "SEARCHING", tone: "cyan", meaning: "Ziggy is searching" },
     options: { text: "OPTIONS", tone: "slate", meaning: "Searched; nothing booked yet" },
     clearance: { text: "CLEARANCE", tone: "yellow", meaning: "Waiting for your approval" },
     boarding: { text: "BOOKING", tone: "yellow", meaning: "Booking now" },
@@ -65,7 +65,7 @@
   {#if rows.length === 0}
     <div class="empty">
       <SplitFlap text="NO DEPARTURES" width={13} {still} />
-      <p class="muted">Tell Monty where you're going. Each search and booking lands here as it happens.</p>
+      <p class="muted">Tell Ziggy where you're going. Each search and booking lands here as it happens.</p>
     </div>
   {:else}
     <table>

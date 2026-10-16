@@ -1,13 +1,13 @@
 """A minimal, MODEL-FREE parent agent used only by the subagent end-to-end test.
 
-The real conversational parent (``conversational_subagent_workflow.py``) drives the Monty
+The real conversational parent (``conversational_subagent_workflow.py``) drives the Ziggy
 script-runner subagent through a live Gemini loop — which can't run in CI. This stand-in
 strips the model out entirely: its single ``@agent.accepts`` handler drives the subagent
 runner methods (``start_subagent`` → ``run_subagent_turn`` → ``stop_subagent``) directly, so a
 ``WorkflowEnvironment`` test can prove the whole subagent mechanism — the handle indirection,
 the ``run_subagent_turn`` activity against a real child, the per-subagent FIFO gate, and the
 turn-counter / stream-offset bookkeeping across multiple turns — against a real
-:class:`~.workflow.MontyDynamicAgentWorkflow` child, with no model in the loop.
+:class:`~.workflow.ZiggyDynamicAgentWorkflow` child, with no model in the loop.
 
 It is kept in its own module (not in the test file) because the Temporal workflow sandbox
 re-imports a workflow's defining module; the test module imports ``Worker`` / ``Client`` /
@@ -30,18 +30,18 @@ with workflow.unsafe.imports_passed_through():
     from temporal_agent_harness.harness.agent_workflow import AgentWorkflowRunner
     from temporal_agent_harness.harness.subagent_toolset import _resolve_workflow_type
 
-    from agent_harness_demo.monty.workflow import MontyDynamicAgentWorkflow
+    from agent_harness_demo.ziggy.workflow import ZiggyDynamicAgentWorkflow
 
 
 class DriveSubagent(BaseModel):
-    """Drive one MontyDynamicAgent subagent end to end.
+    """Drive one ZiggyDynamicAgent subagent end to end.
 
     Starts a single script-runner instance, runs each script in ``scripts`` on it (each its
     own subagent turn, so this exercises the turn counter + stream-offset resume across turns),
     then stops it. The reply concatenates the per-turn outputs."""
 
     task_queue: str = Field(
-        description="The task queue the child MontyDynamicAgent worker polls (the test's queue)."
+        description="The task queue the child ZiggyDynamicAgent worker polls (the test's queue)."
     )
     scripts: list[str] = Field(
         description="Scripts to run in order on the one subagent instance, one turn each."
@@ -87,10 +87,10 @@ class SubagentE2EParentWorkflow:
 
     @agent.accepts
     async def drive(self, msg: DriveSubagent) -> TextReply:
-        """Start a MontyDynamicAgent subagent, run the given scripts on it, then stop it, and
+        """Start a ZiggyDynamicAgent subagent, run the given scripts on it, then stop it, and
         reply with the concatenated per-turn outputs."""
         handle = await self._runner.start_subagent(
-            "monty", _resolve_workflow_type(MontyDynamicAgentWorkflow), msg.task_queue
+            "ziggy", _resolve_workflow_type(ZiggyDynamicAgentWorkflow), msg.task_queue
         )
         try:
             if msg.concurrent:
@@ -139,17 +139,17 @@ class ApprovalGatedSubagentParentWorkflow:
     @agent.accepts
     async def drive(self, msg: DriveSubagent) -> TextReply:
         """Start a subagent, then dispatch one gated send per script CONCURRENTLY through the
-        generated ``monty_run_script`` tool (tool ids ``send-0``, ``send-1``, …). Blocks until
+        generated ``ziggy_run_script`` tool (tool ids ``send-0``, ``send-1``, …). Blocks until
         each is approved; replies with the concatenated outputs."""
         tools = {
             t.__name__: t
             for t in agent.subagent_toolset(
-                MontyDynamicAgentWorkflow, key="monty", task_queue=msg.task_queue
+                ZiggyDynamicAgentWorkflow, key="ziggy", task_queue=msg.task_queue
             )
         }
-        send = tools["monty_run_script"]
+        send = tools["ziggy_run_script"]
         handle = await self._runner.start_subagent(
-            "monty", _resolve_workflow_type(MontyDynamicAgentWorkflow), msg.task_queue
+            "ziggy", _resolve_workflow_type(ZiggyDynamicAgentWorkflow), msg.task_queue
         )
         replies = await asyncio.gather(
             *(

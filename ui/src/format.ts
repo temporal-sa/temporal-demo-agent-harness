@@ -3,7 +3,7 @@ import type { ToolState } from "@temporalio/agent-harness-client";
 /** `book_flight` → `Book flight`. */
 export function toolLabel(name: string): string {
   if (name === "run_travel_code") return "Run a travel script";
-  const words = name.replace(/^monty_/, "").replaceAll("_", " ");
+  const words = name.replace(/^ziggy_/, "").replaceAll("_", " ");
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
@@ -34,8 +34,8 @@ export const usd = new Intl.NumberFormat("en-US", { style: "currency", currency:
 
 export type Policy = "allow_safe" | "strict" | "dangerously_skip_all";
 
-/** What Monty asks about before any `set_approval_policy`: everything but its own trip board. */
-export const DEFAULT_POLICY_HINT = "Monty asks before each script, search, and booking.";
+/** What Ziggy asks about before any `set_approval_policy`: everything but its own trip board. */
+export const DEFAULT_POLICY_HINT = "Ziggy asks before each script, search, and booking.";
 
 /** What each policy `set_approval_policy` accepts asks a person to approve. */
 export const POLICIES: { value: Policy; label: string; hint: string }[] = [

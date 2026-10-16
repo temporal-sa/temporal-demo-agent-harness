@@ -117,11 +117,11 @@
       <button class="button small secondary ultraviolet" type="submit">None of these</button>
     </form>
     <p class="muted">
-      Monty's Workflow is waiting on your pick, durably: it holds until you choose, even across a
+      Ziggy's Workflow is waiting on your pick, durably: it holds until you choose, even across a
       worker restart.
     </p>
   {:else}
-    <p class="muted">Sending your pick to Monty…</p>
+    <p class="muted">Sending your pick to Ziggy…</p>
   {/if}
 </section>
 

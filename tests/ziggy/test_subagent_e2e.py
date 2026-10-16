@@ -1,5 +1,5 @@
 # ABOUTME: End-to-end test of the agents-as-subagents feature: a parent agent drives the
-# barebones MontyDynamicAgent as a SUBAGENT. It uses a model-free stand-in parent
+# barebones ZiggyDynamicAgent as a SUBAGENT. It uses a model-free stand-in parent
 # (SubagentE2EParentWorkflow) whose handler calls the runner's start_subagent /
 # run_subagent_turn / stop_subagent directly — so the whole subagent mechanism (the handle
 # indirection, the run_subagent_turn activity against a real child, the per-subagent FIFO gate,
@@ -7,7 +7,7 @@
 # child workflow with NO model (so no GEMINI_API_KEY needed; this is the Workstream D milestone
 # assertion that the live conversational parent can't make in CI).
 #
-# Run with: uv run pytest tests/agent_harness_demo/monty/test_subagent_e2e.py -v
+# Run with: uv run pytest tests/ziggy/test_subagent_e2e.py -v
 
 from __future__ import annotations
 
@@ -37,8 +37,8 @@ from temporal_agent_harness.plugin import AgentHarnessPlugin
 
 from temporal_agent_harness.harness.agent_client import AgentClient
 
-from agent_harness_demo.monty import activities
-from agent_harness_demo.monty.workflow import MontyDynamicAgentWorkflow
+from agent_harness_demo.ziggy import activities
+from agent_harness_demo.ziggy.workflow import ZiggyDynamicAgentWorkflow
 from ._subagent_e2e_parent import (
     ApprovalGatedSubagentParentWorkflow,
     SubagentE2EParentWorkflow,
@@ -52,7 +52,7 @@ async def client_and_queue():
     )
     task_queue = f"subagent-e2e-{uuid.uuid4()}"
     # One worker hosts BOTH the parent and the child agent (the parent starts the child on this
-    # same queue). The harness plugin supplies everything else: the Monty batch + host
+    # same queue). The harness plugin supplies everything else: the pydantic-monty batch + host
     # activities the child needs, and the subagent-turn activity the parent's runner dispatches
     # — the latter bound to this worker's client so it can talk to the child workflow.
     async with Worker(
@@ -61,7 +61,7 @@ async def client_and_queue():
         workflows=[
             SubagentE2EParentWorkflow,
             ApprovalGatedSubagentParentWorkflow,
-            MontyDynamicAgentWorkflow,
+            ZiggyDynamicAgentWorkflow,
         ],
         plugins=[AgentHarnessPlugin(tools=activities.ALL_TOOLS)],
     ):
@@ -139,7 +139,7 @@ async def test_parent_drives_subagent_across_sequential_turns(client_and_queue):
     started = [e.event for e in events if e.event.type == AgentEventType.SUBAGENT_STARTED]
     stopped = [e.event for e in events if e.event.type == AgentEventType.SUBAGENT_STOPPED]
     assert len(started) == 1 and len(stopped) == 1
-    assert started[0].agent_key == "monty"
+    assert started[0].agent_key == "ziggy"
     assert started[0].workflow_id and started[0].workflow_id == stopped[0].workflow_id
     assert started[0].subagent_id == stopped[0].subagent_id
 

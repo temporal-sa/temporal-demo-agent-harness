@@ -3,7 +3,7 @@ import bash from "highlight.js/lib/languages/bash";
 import json from "highlight.js/lib/languages/json";
 import python from "highlight.js/lib/languages/python";
 
-// Only the languages Monty's scripts, tool arguments, and replies use, to keep the bundle small.
+// Only the languages Ziggy's scripts, tool arguments, and replies use, to keep the bundle small.
 hljs.registerLanguage("python", python);
 hljs.registerLanguage("json", json);
 hljs.registerLanguage("bash", bash);

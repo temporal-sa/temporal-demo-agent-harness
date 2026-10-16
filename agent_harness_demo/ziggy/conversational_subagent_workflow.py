@@ -1,20 +1,20 @@
-"""Conversational Monty agent that drives the script-runner as a SUBAGENT.
+"""Conversational Ziggy agent that drives the script-runner as a SUBAGENT.
 
-This is the subagent-flavoured twin of :class:`MontyChatAgentWorkflow`
+This is the subagent-flavoured twin of :class:`ZiggyChatAgentWorkflow`
 (``conversational_workflow.py``). Both put a *model in the loop*: the user chats in plain
 text, the model converses to gather what it needs, then writes its own Python script and runs
 it. The conversational front end — the Gemini Interactions tool-calling loop — is the same shape.
 
-The ONE difference is *where the script runs*. :class:`MontyChatAgentWorkflow` runs each
+The ONE difference is *where the script runs*. :class:`ZiggyChatAgentWorkflow` runs each
 model-authored script inline, via a ``run_travel_code`` Code Mode tool
 (``agent.code_mode_tool`` over the travel tools) held on the workflow itself. This agent instead
-drives the barebones :class:`~.workflow.MontyDynamicAgentWorkflow` — whose sole ``@agent.accepts``
+drives the barebones :class:`~.workflow.ZiggyDynamicAgentWorkflow` — whose sole ``@agent.accepts``
 handler, ``run_script(RunScript) -> TextReply``, runs a script in its own Code Mode over the same
 travel tools — as a **subagent**. The script-runner is wired with
-``agent.subagent_toolset(MontyDynamicAgentWorkflow, key="monty", task_queue=...)``,
-which generates three model-facing tools: ``start_monty`` (start an instance, returns a short
-handle), ``monty_run_script`` (send a script to that instance and get its reply), and
-``stop_monty`` (shut it down). So ``monty_run_script`` is the subagent counterpart of the inline
+``agent.subagent_toolset(ZiggyDynamicAgentWorkflow, key="ziggy", task_queue=...)``,
+which generates three model-facing tools: ``start_ziggy`` (start an instance, returns a short
+handle), ``ziggy_run_script`` (send a script to that instance and get its reply), and
+``stop_ziggy`` (shut it down). So ``ziggy_run_script`` is the subagent counterpart of the inline
 agent's ``run_travel_code`` tool — same capability, now across a real parent→subagent boundary.
 
 Why this exists: it's the first real end-to-end exercise of the subagent toolset
@@ -23,8 +23,8 @@ subagent (the per-subagent FIFO gate + turn counter + stream-offset resume), and
 ``run_subagent_turn`` activity against a live child workflow.
 
 Approval stance: this agent runs under ``always_require_human_approval`` (like
-:class:`MontyChatAgentWorkflow`), so it **gates the subagent tools** — every ``start_monty`` /
-``monty_run_script`` / ``stop_monty`` call escalates to a human. The script's host calls
+:class:`ZiggyChatAgentWorkflow`), so it **gates the subagent tools** — every ``start_ziggy`` /
+``ziggy_run_script`` / ``stop_ziggy`` call escalates to a human. The script's host calls
 (search/book flights & hotels) run *inside the child*, which keeps its own
 ``dangerously_skip_all`` policy, so — unlike the inline agent — those host calls are NOT gated
 in the parent. (Forwarding a gating policy into the child is a possible follow-up.)
@@ -73,18 +73,18 @@ with workflow.unsafe.imports_passed_through():
         system_instruction,
     )
     from .models import TravelerContext
-    from .workflow import MontyDynamicAgentWorkflow
+    from .workflow import ZiggyDynamicAgentWorkflow
 
 
 DEFAULT_MODEL = SUPPORTED_MODELS[0]
 
 # The namespace for the wired script-runner subagent. Tool names are derived from it:
-# start_monty / monty_run_script / stop_monty.
-SUBAGENT_KEY = "monty"
+# start_ziggy / ziggy_run_script / stop_ziggy.
+SUBAGENT_KEY = "ziggy"
 
 
 SYSTEM_INSTRUCTION = f"""\
-You are a friendly travel-booking assistant. You help users search and book flights and \
+You are Ziggy, Temporal's friendly travel-booking assistant. You help users search and book flights and \
 hotels and assemble trip itineraries. You don't have these abilities directly — instead you \
 write small async Python scripts and run them on a dedicated script-runner subagent, using \
 these tools:
@@ -113,16 +113,16 @@ options, prices, confirmations. You may run more scripts in follow-up turns.
 - Never invent flight/hotel ids or confirmation codes — only use ones returned by a script."""
 
 
-@agent.defn(name="MontyChatSubagentAgent")
-class MontyChatSubagentWorkflow:
+@agent.defn(name="ZiggyChatSubagentAgent")
+class ZiggyChatSubagentWorkflow:
     @agent.init
     def __init__(self, config: AgentConfig, data: TravelerContext | None = None) -> None:
         self._instruction = system_instruction(SYSTEM_INSTRUCTION, data)
         self._runner = AgentWorkflowRunner(
             config,
             stream=WorkflowStream(),
-            # Gate the subagent tools: every start_monty / monty_run_script / stop_monty call
-            # escalates to a human (same stance as the inline MontyChatAgent). The script's
+            # Gate the subagent tools: every start_ziggy / ziggy_run_script / stop_ziggy call
+            # escalates to a human (same stance as the inline ZiggyChatAgent). The script's
             # host calls run inside the child, which has its own dangerously_skip_all policy.
             approval_policy_default=ToolApprovalPolicy.always_require_human_approval(),
         )
@@ -130,18 +130,18 @@ class MontyChatSubagentWorkflow:
         # The whole conversation, sent as the input of every model call (see
         # InteractionConversation for why it is not chained by interaction id).
         self._conversation = InteractionConversation()
-        # The model-facing tools: drive the barebones MontyDynamicAgent script-runner as a
+        # The model-facing tools: drive the barebones ZiggyDynamicAgent script-runner as a
         # subagent. Built statically from its @agent.accepts handlers — no child started here.
-        # Yields start_monty / monty_run_script / stop_monty.
+        # Yields start_ziggy / ziggy_run_script / stop_ziggy.
         self._tools = agent.subagent_toolset(
-            MontyDynamicAgentWorkflow,
+            ZiggyDynamicAgentWorkflow,
             key=SUBAGENT_KEY,
             # The child runs on this workflow's own queue, so a crashable workspace's
             # subagents stay on that workspace's workers.
             task_queue=workflow.info().task_queue,
         )
         self._callables_by_name = {fn.__name__: fn for fn in self._tools}
-        # Same Temporal-aware AsyncClient as the QA / inline-Monty agents; the runner is wired
+        # Same Temporal-aware AsyncClient as the QA / inline-Ziggy agents; the runner is wired
         # in so reply text streams to the workflow stream as it is generated.
         self._gemini = google_genai_client(
             activity_config=ActivityConfig(
@@ -159,7 +159,7 @@ class MontyChatSubagentWorkflow:
         reply_text = await self._handle_chat_turn(self._gemini, message.text)
         return TextReply(text=reply_text)
 
-    # See the inline MontyChatAgent's set_model for why this is ACCEPT + not model_callable.
+    # See the inline ZiggyChatAgent's set_model for why this is ACCEPT + not model_callable.
     @agent.accepts(mid_turn=MidTurn.ACCEPT, model_callable=False)
     async def set_model(self, message: SetModel) -> TextReply:
         """Set the model this session uses for subsequent turns. Takes effect on the next
@@ -203,7 +203,7 @@ class MontyChatSubagentWorkflow:
         lifecycle events correlate with the streaming activity's ``tool_requested``) AND parks
         the live runner in ``_CURRENT_RUNNER`` — which is exactly how the generated subagent
         tools reach this runner's subagent registry + start/stop/run-turn methods. The generated
-        ``monty_run_script`` tool returns a typed ``TextReply`` (a pydantic ``BaseModel``), so
+        ``ziggy_run_script`` tool returns a typed ``TextReply`` (a pydantic ``BaseModel``), so
         serialize it with ``model_dump_json()`` for the model rather than a Python repr."""
         tool_callable = self._callables_by_name.get(call.name)
         try:
