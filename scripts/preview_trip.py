@@ -47,7 +47,6 @@ async def main():
         asyncio.gather(*[search_flights({"origin": o, "destination": d, "date": day}) for o, d, day in legs]),
         asyncio.gather(*[search_hotels({"city": c, "check_in": i, "check_out": out}) for c, i, out, _ in stays]),
     )
-    hotels = [min(found["hotels"], key=lambda h: h["price_per_night_usd"]) for found in hotels_found]
 
     # Two ways to fly it, offered as cards; the traveler's pick comes back as a typed Choice.
     itineraries = {
@@ -76,6 +75,25 @@ async def main():
     choice = await ask_traveler_to_choose({"question": "Which way would you like to fly?", "options": options})
     flights = itineraries[choice["option_id"] or "cheapest"]
     fare = choice["fare"] or "economy"
+
+    # Then a hotel in each city, one question per city, the same way.
+    hotels = []
+    for (city, check_in, check_out, nights), found in zip(stays, hotels_found):
+        offered: list[HotelOption] = []
+        for h in found["hotels"][:3]:
+            offer: HotelOption = {"hotel_id": h["hotel_id"], "name": h["name"],
+                                  "neighborhood": h["neighborhood"], "star_rating": h["star_rating"],
+                                  "price_per_night_usd": h["price_per_night_usd"],
+                                  "total_usd": round(h["price_per_night_usd"] * nights, 2)}
+            offered.append(offer)
+        picked = await ask_traveler_to_choose_hotel({"question": "Where would you like to stay in " + city + "?",
+                                                     "city": city, "check_in": check_in,
+                                                     "check_out": check_out, "options": offered})
+        stay = found["hotels"][0]
+        for h in found["hotels"]:
+            if h["hotel_id"] == picked["hotel_id"]:
+                stay = h
+        hotels.append(stay)
 
     # Then every booking at once, flights and hotels each in their own gather.
     flights_booked, hotels_booked = await asyncio.gather(

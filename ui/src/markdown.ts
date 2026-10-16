@@ -12,7 +12,8 @@ export type Block =
   | { kind: "code"; language: string; text: string }
   | { kind: "paragraph"; lines: Inline[][] };
 
-const INLINE = /(\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\*[^*\s][^*]*\*|_[^_\s][^_]*_)/g;
+// Underscores only emphasize at word edges, so snake_case names like trip_id stay as written.
+const INLINE = /(\*\*[^*]+\*\*|(?<!\w)__[^_]+__(?!\w)|`[^`]+`|\*[^*\s][^*]*\*|(?<!\w)_[^_\s][^_]*_(?!\w))/g;
 
 export function inline(text: string): Inline[] {
   return text

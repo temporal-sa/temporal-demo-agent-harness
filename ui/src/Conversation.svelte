@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { HarnessMessage, MessagePart, ToolPart } from "@temporalio/agent-harness-client";
   import { policyLabel, toolBadge, toolLabel } from "./format.ts";
-  import { CHOICE_TOOL, choiceRequest, choiceSummary } from "./choices.ts";
+  import { choiceRequest, choiceSummary, isChoiceTool } from "./choices.ts";
   import Code from "./Code.svelte";
   import Markdown from "./Markdown.svelte";
   import type { MontyChatAgent } from "./generated/MontyChatAgent.ts";
@@ -62,7 +62,7 @@
       } else if (part.type === "thought_summary") {
         if (last?.kind === "thought") last.text += part.text;
         else out.push({ kind: "thought", text: part.text });
-      } else if (part.type === "tool" && typeof part.input.script !== "string" && part.toolName !== CHOICE_TOOL) {
+      } else if (part.type === "tool" && typeof part.input.script !== "string" && !isChoiceTool(part.toolName)) {
         const prev = last?.kind === "part" && last.part.type === "tool" ? last.part : null;
         if (last?.kind === "tools" && last.name === part.toolName) last.parts.push(part);
         else if (prev && prev.toolName === part.toolName && typeof prev.input.script !== "string") {
@@ -173,7 +173,7 @@
                   </span>
                 {/if}
               </div>
-            {:else if segment.part.type === "tool" && segment.part.toolName === CHOICE_TOOL}
+            {:else if segment.part.type === "tool" && isChoiceTool(segment.part.toolName)}
               {@const call = segment.part}
               <div class="activity">
                 {#if call.state === "awaiting_callback"}

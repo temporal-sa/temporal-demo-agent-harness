@@ -1,6 +1,7 @@
-"""Asking the traveler to choose between trip options, answered in their browser.
+"""Asking the traveler to choose between trip options or hotels, answered in their browser.
 
-`ask_traveler_to_choose` is a harness *callback tool*: it has no body. When a script calls it,
+`ask_traveler_to_choose` and `ask_traveler_to_choose_hotel` are harness *callback tools*: they
+have no body. When a script calls it,
 the agent publishes the options and waits, durably and for as long as it takes, until a client
 answers. The demo view draws each option as a card and answers with the traveler's pick, so
 the script carries on with a typed `Choice` instead of the model guessing from free text.
@@ -64,5 +65,41 @@ async def ask_traveler_to_choose(request: ChoiceRequest) -> Choice:
     ...
 
 
-CHOICE_TOOLS = [ask_traveler_to_choose]
+class HotelOption(BaseModel):
+    hotel_id: str
+    name: str
+    neighborhood: str
+    star_rating: int
+    price_per_night_usd: float
+    total_usd: float
+    """The whole stay: the nightly price times the nights."""
+    note: str | None = None
+    """Anything worth weighing: "Walk to the conference venue"."""
+
+
+class HotelChoiceRequest(BaseModel):
+    question: str
+    city: str
+    check_in: str
+    """YYYY-MM-DD."""
+    check_out: str
+    """YYYY-MM-DD."""
+    options: list[HotelOption]
+
+
+class HotelChoice(BaseModel):
+    hotel_id: str | None
+    """The hotel picked, or None if the traveler wants something else."""
+    comment: str | None = None
+    """What the traveler said instead of, or as well as, picking."""
+
+
+@agent.callback_tool_defn(inherently_safe=True)
+async def ask_traveler_to_choose_hotel(request: HotelChoiceRequest) -> HotelChoice:
+    """Show the traveler two or more hotels for one city and stay as cards, with each stay's
+    total, and wait for them to pick one or to say what they want instead."""
+    ...
+
+
+CHOICE_TOOLS = [ask_traveler_to_choose, ask_traveler_to_choose_hotel]
 CHOICE_TOOL_NAMES = [tool.__name__ for tool in CHOICE_TOOLS]

@@ -102,3 +102,57 @@ async def test_the_travelers_pick_comes_back_to_the_script(client_and_queue):
 
     assert reply is not None
     assert "picked FL-ATLZRH-20261221-002 in business" in reply
+
+
+HOTEL_SCRIPT = """
+import asyncio
+async def main():
+    found = await search_hotels({"city": "Zurich", "check_in": "2026-12-21", "check_out": "2026-12-24"})
+    hotels: list[HotelOption] = []
+    for h in found["hotels"][:2]:
+        hotel: HotelOption = {"hotel_id": h["hotel_id"], "name": h["name"],
+                              "neighborhood": h["neighborhood"], "star_rating": h["star_rating"],
+                              "price_per_night_usd": h["price_per_night_usd"],
+                              "total_usd": h["price_per_night_usd"] * 3}
+        hotels.append(hotel)
+    picked = await ask_traveler_to_choose_hotel({"question": "Where to stay?", "city": "Zurich",
+                                                 "check_in": "2026-12-21", "check_out": "2026-12-24",
+                                                 "options": hotels})
+    return "staying at " + str(picked["hotel_id"])
+asyncio.run(main())
+"""
+
+
+async def test_the_travelers_hotel_comes_back_to_the_script(client_and_queue):
+    client, task_queue = client_and_queue
+    handle = await client.start_workflow(
+        MontyDynamicAgentWorkflow.run,
+        AgentConfig(),
+        id=f"MontyDynamicAgent-{uuid.uuid4()}",
+        task_queue=task_queue,
+    )
+    await handle.execute_update(
+        SEND_AGENT_MESSAGE_UPDATE,
+        AgentMessage(type="run_script", payload={"script": HOTEL_SCRIPT}),
+        result_type=AgentMessageReply,
+    )
+
+    reply = None
+    picked = None
+    stream = WorkflowStreamClient.create(client, handle.id)
+    async for item in stream.subscribe(
+        topics=[TURN_EVENTS_TOPIC], from_offset=0, result_type=AgentEvent
+    ):
+        event = item.data.event
+        if event.type == AgentEventType.CALLBACK_REQUESTED:
+            picked = event.tool_input["request"]["options"][1]["hotel_id"]
+            await AgentClient(temporal=client, workflow_id=handle.id).provide_callback_result(
+                event.tool_id, result={"hotel_id": picked, "comment": None}
+            )
+        if event.type == AgentEventType.MESSAGE_HANDLER_END:
+            reply = event.output.get("text")
+        if event.type == AgentEventType.TURN_END:
+            break
+
+    assert picked is not None
+    assert reply is not None and f"staying at {picked}" in reply

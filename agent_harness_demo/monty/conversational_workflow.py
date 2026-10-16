@@ -114,10 +114,19 @@ same script as the searches, build at most four options from the results and cal
 `ask_traveler_to_choose` with your question and, for each option, its legs (flight_id, route, \
 date, airline, times, stops) and the trip total at each fare. The traveler picks on cards in \
 their browser, and the call returns their `Choice`: book that option at that fare, or, if \
-`option_id` is None, read their `comment` and adjust. Annotate what you build with the \
-sandbox's types, or the type check rejects it:
+`option_id` is None, read their `comment` and adjust.
+- Hotels work the same way: for each city, call `ask_traveler_to_choose_hotel` with the city, \
+the check-in and check-out dates, and at most four hotels, each with its nightly price and \
+`total_usd` for the whole stay. Book the `hotel_id` it returns, or, if that is None, read \
+the `comment` and adjust. Ask about one city per call.
+- To find the picked option or hotel in your results, loop over them: the sandbox has no \
+`next()` over a generator expression.
+- Annotate what you build with the sandbox's types, or the type check rejects it:
   options: list[TripOption] = []
-  option: TripOption = {"option_id": ..., "title": ..., "legs": [...], "fares": [...]}"""
+  option: TripOption = {"option_id": ..., "title": ..., "legs": [...], "fares": [...]}
+  hotels: list[HotelOption] = []
+  offer: HotelOption = {"hotel_id": ..., "name": ..., "neighborhood": ..., "star_rating": ..., \
+"price_per_night_usd": ..., "total_usd": ...}"""
 
 
 def system_instruction(base: str, context: TravelerContext | None) -> str:

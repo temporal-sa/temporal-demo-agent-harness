@@ -3,7 +3,7 @@
   import type { MontyChatAgent, TripBoard as Board } from "./generated/MontyChatAgent.ts";
   import ApprovalQueue from "./ApprovalQueue.svelte";
   import ChoiceCards from "./ChoiceCards.svelte";
-  import { CHOICE_TOOL } from "./choices.ts";
+  import { isChoiceTool } from "./choices.ts";
   import Conversation from "./Conversation.svelte";
   import { MODELS, type Model, type Policy } from "./format.ts";
   import Settings from "./Settings.svelte";
@@ -90,7 +90,7 @@
   const rows = $derived(departures(Object.values(agent.agents), board));
   // Choices waiting on the traveler, from Monty or any subagent, take over the chat column
   // until they're answered; the chat comes back, scrolled to the newest, once they are.
-  const choices = $derived(agent.pendingCallbacks.filter((c) => c.part.toolName === CHOICE_TOOL));
+  const choices = $derived(agent.pendingCallbacks.filter((c) => isChoiceTool(c.part.toolName)));
   const still = $derived(motion.paused || motion.reduced);
 
   let draft = $state("");
