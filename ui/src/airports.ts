@@ -32,3 +32,33 @@ export const AIRPORTS: Record<string, [lat: number, lon: number]> = {
   AKL: [-37.01, 174.79], GRU: [-23.43, -46.47], EZE: [-34.82, -58.54], BOG: [4.7, -74.15],
   LIM: [-12.02, -77.11], SCL: [-33.39, -70.79], JNB: [-26.14, 28.24], CPT: [-33.97, 18.6],
 };
+
+/** Each city's main airport, so a hotel searched by city name lands in the right place. */
+const CITY_AIRPORTS: Record<string, string> = {
+  "new york": "JFK", "new york city": "JFK", nyc: "JFK", manhattan: "JFK", brooklyn: "JFK",
+  london: "LHR", paris: "CDG", zurich: "ZRH", "zürich": "ZRH", geneva: "GVA", basel: "BSL",
+  "san francisco": "SFO", "los angeles": "LAX", chicago: "ORD", boston: "BOS", seattle: "SEA",
+  atlanta: "ATL", miami: "MIA", denver: "DEN", dallas: "DFW", houston: "IAH", "las vegas": "LAS",
+  orlando: "MCO", washington: "DCA", "washington dc": "DCA", "washington, dc": "DCA",
+  philadelphia: "PHL", austin: "AUS", nashville: "BNA", "new orleans": "MSY", honolulu: "HNL",
+  "san diego": "SAN", portland: "PDX", phoenix: "PHX", "salt lake city": "SLC",
+  minneapolis: "MSP", detroit: "DTW", "san jose": "SJC", oakland: "OAK", charlotte: "CLT",
+  toronto: "YYZ", vancouver: "YVR", montreal: "YUL", "mexico city": "MEX", cancun: "CUN",
+  amsterdam: "AMS", frankfurt: "FRA", munich: "MUC", madrid: "MAD", barcelona: "BCN",
+  rome: "FCO", dublin: "DUB", lisbon: "LIS", copenhagen: "CPH", stockholm: "ARN", oslo: "OSL",
+  vienna: "VIE", prague: "PRG", brussels: "BRU", athens: "ATH", edinburgh: "EDI",
+  manchester: "MAN", nice: "NCE", helsinki: "HEL", warsaw: "WAW", budapest: "BUD",
+  reykjavik: "KEF", istanbul: "IST", "tel aviv": "TLV", dubai: "DXB", doha: "DOH", cairo: "CAI",
+  tokyo: "HND", seoul: "ICN", beijing: "PEK", shanghai: "PVG", "hong kong": "HKG",
+  singapore: "SIN", bangkok: "BKK", delhi: "DEL", "new delhi": "DEL", mumbai: "BOM",
+  sydney: "SYD", melbourne: "MEL", auckland: "AKL", "sao paulo": "GRU", "são paulo": "GRU",
+  "buenos aires": "EZE", bogota: "BOG", lima: "LIM", santiago: "SCL", johannesburg: "JNB",
+  "cape town": "CPT",
+};
+
+/** The airport for a city name, ignoring case, accents in the table, and a trailing region
+ *  ("Zurich, Switzerland"). Undefined for a city the map doesn't know. */
+export function airportForCity(city: string): string | undefined {
+  const name = city.toLowerCase().trim();
+  return CITY_AIRPORTS[name] ?? CITY_AIRPORTS[name.split(",")[0].trim()];
+}

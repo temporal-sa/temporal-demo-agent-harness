@@ -118,7 +118,7 @@
   .empty p { font-size: .8rem; max-width: 22rem; margin: 0; }
   table { border-collapse: separate; border-spacing: 0 .35rem; font-size: .95rem; }
   th { text-align: left; font-weight: 500; padding: 0 .6rem .2rem 0; }
-  td { padding: 0 .6rem 0 0; color: var(--yellow); vertical-align: middle; }
+  td { padding: 0 .6rem 0 0; color: var(--yellow); vertical-align: middle; white-space: nowrap; }
   td.status.green { color: var(--green); }
   td.status.yellow { color: var(--yellow); }
   td.status.cyan { color: var(--cyan); }

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { geoGraticule10, geoMercator, geoPath, type GeoProjection } from "d3-geo";
   import type { FeatureCollection, MultiLineString } from "geojson";
-  import { AIRPORTS } from "./airports.ts";
+  import { AIRPORTS, airportForCity } from "./airports.ts";
   import { isMoving, type Row, type Stage } from "./travel.ts";
 
   let { rows, away }: { rows: Row[]; away: boolean } = $props();
@@ -16,7 +16,21 @@
   const flights = $derived(rows.filter((r) => r.kind === "flight" && AIRPORTS[r.from] && AIRPORTS[r.to]));
   const hotels = $derived(rows.filter((r) => r.kind === "hotel"));
   const unmapped = $derived(rows.filter((r) => r.kind === "flight" && !(AIRPORTS[r.from] && AIRPORTS[r.to])));
-  const codes = $derived([...new Set(flights.flatMap((r) => [r.from, r.to]))]);
+  // Stays are searched by city name, so each pin goes to that city's airport. A city the map
+  // doesn't know falls back to where a flight lands on the check-in date, and otherwise gets
+  // no pin rather than a wrong one.
+  const stays = $derived.by(() => {
+    const placed = new Map<string, Row[]>();
+    for (const stay of hotels) {
+      const airport =
+        airportForCity(stay.from) ?? flights.find((f) => stay.date && f.date === stay.date)?.to;
+      if (airport && AIRPORTS[airport]) placed.set(airport, [...(placed.get(airport) ?? []), stay]);
+    }
+    return [...placed.entries()];
+  });
+  const flightCodes = $derived([...new Set(flights.flatMap((r) => [r.from, r.to]))]);
+  // The map frames every airport in play, a stay's included, so no pin falls off its edge.
+  const codes = $derived([...new Set([...flightCodes, ...stays.map(([airport]) => airport)])]);
 
   // Land and borders from Natural Earth (1:110m), loaded after the page so it never delays it.
   let land = $state<FeatureCollection | null>(null);
@@ -92,16 +106,6 @@
             : "Ready for departure",
   );
 
-  // Stays are searched by city name, not airport, so each pin goes where the flight that
-  // arrives on its check-in date lands, or the trip's last destination if none matches.
-  const stays = $derived.by(() => {
-    const placed = new Map<string, Row[]>();
-    for (const stay of hotels) {
-      const airport = flights.find((f) => stay.date && f.date === stay.date)?.to ?? flights.at(-1)?.to;
-      if (airport) placed.set(airport, [...(placed.get(airport) ?? []), stay]);
-    }
-    return [...placed.entries()];
-  });
 
 </script>
 
