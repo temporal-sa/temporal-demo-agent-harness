@@ -15,17 +15,31 @@
     searching: { text: "SEARCHING", tone: "cyan", meaning: "Monty is searching" },
     options: { text: "OPTIONS", tone: "slate", meaning: "Searched; nothing booked yet" },
     clearance: { text: "CLEARANCE", tone: "yellow", meaning: "Waiting for your approval" },
-    boarding: { text: "BOARDING", tone: "yellow", meaning: "Booking now" },
+    boarding: { text: "BOOKING", tone: "yellow", meaning: "Booking now" },
     confirmed: { text: "CONFIRMED", tone: "green", meaning: "Booked" },
     declined: { text: "CANCELLED", tone: "slate", meaning: "You declined it" },
     failed: { text: "FAILED", tone: "red", meaning: "The booking failed" },
   };
+
+  // While a booking runs, its dots flip in one at a time and clear: "BOOKING." to
+  // "BOOKING..." and back. Held at three when motion is paused or reduced.
+  let dots = $state(3);
+  const booking = $derived(!away && rows.some((row) => row.stage === "boarding"));
+  $effect(() => {
+    if (!booking || still) {
+      dots = 3;
+      return;
+    }
+    const timer = setInterval(() => (dots = (dots + 1) % 4), 700);
+    return () => clearInterval(timer);
+  });
 
   // Work that needs a worker reads as delayed while none answers; it resumes, not restarts.
   function status(row: Row) {
     if (away && isMoving(row.stage)) {
       return { text: "DELAYED", tone: "yellow", meaning: "No worker answering; resumes where it stopped" };
     }
+    if (row.stage === "boarding") return { ...STATUS.boarding, text: "BOOKING" + ".".repeat(dots) };
     return STATUS[row.stage];
   }
 
@@ -72,7 +86,7 @@
               <SplitFlap text={row.date.slice(5) || ""} width={5} {still} />
               {#if row.moreDates > 0}<span class="more mono" title="{row.moreDates} more dates searched">+{row.moreDates}</span>{/if}
             </td>
-            <td class="status {s.tone}" title={s.meaning}><SplitFlap text={s.text} width={9} {still} /></td>
+            <td class="status {s.tone}" title={s.meaning}><SplitFlap text={s.text} width={10} {still} /></td>
             <td class="code"><SplitFlap text={row.code} width={10} {still} /></td>
           </tr>
           {#if row.kind === "hotel" && row.label && row.from}
