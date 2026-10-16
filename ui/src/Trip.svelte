@@ -100,7 +100,7 @@
 
 <main class="workspace">
   <div class="travel">
-    <RouteMap {rows} {away} {still} />
+    <RouteMap {rows} {away} />
     <Departures {rows} {board} {away} {still} />
   </div>
 

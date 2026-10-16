@@ -2,10 +2,9 @@
   import { geoGraticule10, geoMercator, geoPath, type GeoProjection } from "d3-geo";
   import type { FeatureCollection, MultiLineString } from "geojson";
   import { AIRPORTS } from "./airports.ts";
-  import ziggy from "./assets/ziggy-face.png";
   import { isMoving, type Row, type Stage } from "./travel.ts";
 
-  let { rows, away, still }: { rows: Row[]; away: boolean; still: boolean } = $props();
+  let { rows, away }: { rows: Row[]; away: boolean } = $props();
 
   // The drawing matches the panel's size, so the map fills it without stretching.
   let width = $state(1000);
@@ -73,48 +72,22 @@
     return `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`;
   }
 
-  /** The halfway point along `arc(from, to)`. */
-  function midpoint(from: string, to: string): readonly [number, number] {
-    const { x1, y1, x2, y2, cx, cy } = curve(from, to);
-    return [0.25 * x1 + 0.5 * cx + 0.25 * x2, 0.25 * y1 + 0.5 * cy + 0.25 * y2];
-  }
-
   const TONE: Record<Stage, string> = {
     searching: "cyan", options: "slate", clearance: "yellow", boarding: "yellow",
     confirmed: "green", declined: "slate", failed: "red",
   };
 
-  // Ziggy sits halfway along the leg Monty is working on, at its origin while it waits for
-  // clearance or a worker, and otherwise where the trip last landed. The plane holds still;
-  // the caption and the board say what is happening.
+  // The caption says which leg Monty is working on, from the same rows as the board.
   const active = $derived(flights.findLast((r) => ["searching", "boarding", "clearance"].includes(r.stage)));
   const landed = $derived(flights.findLast((r) => r.stage === "confirmed"));
-  const ziggyMode = $derived(
-    away && rows.some((r) => isMoving(r.stage))
-      ? "holding"
-      : active
-        ? active.stage === "clearance" ? "waiting" : "flying"
-        : landed ? "parked" : "idle",
-  );
-  const ziggyAt = $derived.by(() => {
-    if (ziggyMode === "parked" && landed) {
-      const [x, y] = point(landed.to);
-      return [x, y - 30] as const; // above the airport, clear of its label
-    }
-    if (active && ziggyMode === "flying") return midpoint(active.from, active.to);
-    if (active) return point(active.from);
-    if (landed) return point(landed.to);
-    return [W / 2, H / 2] as const;
-  });
-  const heading = $derived(active ? Math.sign(point(active.to)[0] - point(active.from)[0]) || 1 : 1);
   const caption = $derived(
-    ziggyMode === "flying" && active
-      ? `${active.stage === "searching" ? "Searching" : "Booking"} ${active.from} → ${active.to}`
-      : ziggyMode === "waiting" && active
-        ? `Waiting for clearance · ${active.from} → ${active.to}`
-        : ziggyMode === "holding"
-          ? "Holding · worker offline"
-          : ziggyMode === "parked" && landed
+    away && rows.some((r) => isMoving(r.stage))
+      ? "Delayed · no worker answering"
+      : active?.stage === "clearance"
+        ? `Waiting for your approval · ${active.from} → ${active.to}`
+        : active
+          ? `${active.stage === "searching" ? "Searching" : "Booking"} ${active.from} → ${active.to}`
+          : landed
             ? `Landed at ${landed.to}`
             : "Ready for departure",
   );
@@ -130,12 +103,6 @@
     return [...placed.entries()];
   });
 
-  let svg: SVGSVGElement | undefined = $state();
-  $effect(() => {
-    if (!svg) return;
-    if (still) svg.pauseAnimations();
-    else svg.unpauseAnimations();
-  });
 </script>
 
 <section class="card map" aria-labelledby="map-title">
@@ -145,9 +112,8 @@
   </header>
 
   <div class="frame" bind:clientWidth={width} bind:clientHeight={height}>
-  <svg bind:this={svg} viewBox="0 0 {W} {H}" width={W} height={H} role="img" aria-label="Route map. {caption}.">
+  <svg viewBox="0 0 {W} {H}" width={W} height={H} role="img" aria-label="Route map. {caption}.">
     <defs>
-      <clipPath id="cockpit"><circle cx="88" cy="16" r="10" /></clipPath>
       <radialGradient id="glow">
         <stop offset="0%" stop-color="rgba(68,76,231,.35)" />
         <stop offset="100%" stop-color="rgba(68,76,231,0)" />
@@ -186,23 +152,6 @@
       {/each}
     {/each}
 
-    <g transform="translate({ziggyAt[0]} {ziggyAt[1]})">
-      <g class="ziggy-pilot">
-        <!-- A small airliner, nose to the right, with Ziggy at the controls. -->
-        <g transform="scale({0.7 * heading} 0.7) translate(-52 -24)">
-          <path class="plane fin" d="M14 17 L6 1 L17 1 L30 17 Z" />
-          <path class="plane wing far" d="M52 17 L62 6 L68 6 L64 17 Z" />
-          <path class="plane body" d="M6 24 C6 19 11 17 20 17 L80 17 C93 17 102 20 102 24 C102 28 93 31 80 31 L20 31 C11 31 6 29 6 24 Z" />
-          {#each [34, 42, 50, 58, 66] as x (x)}
-            <circle class="window" cx={x} cy="22.5" r="1.8" />
-          {/each}
-          <path class="plane wing" d="M44 27 L62 27 L50 45 L41 45 Z" />
-          <circle class="canopy" cx="88" cy="16" r="11" />
-          <image href={ziggy} x="73" y="2" width="32" height="34" clip-path="url(#cockpit)" />
-          <circle class="canopy-rim" cx="88" cy="16" r="11" />
-        </g>
-      </g>
-    </g>
   </svg>
   </div>
 
@@ -235,14 +184,6 @@
   .hotel.yellow rect, .hotel.cyan rect { stroke: var(--yellow); }
   .hotel.slate rect { stroke: var(--slate-500); }
   .hotel text { font-size: 12px; }
-  .plane { stroke: #0b0b12; stroke-width: 1.4; stroke-linejoin: round; }
-  .plane.body { fill: #e9ebff; }
-  .plane.fin { fill: var(--uv-light); }
-  .plane.wing { fill: var(--indigo-200); }
-  .plane.wing.far { fill: var(--indigo-300); }
-  .window { fill: var(--uv); }
-  .canopy { fill: #1f203f; }
-  .canopy-rim { fill: none; stroke: #0b0b12; stroke-width: 1.6; }
   .note { margin: 0; }
   @keyframes dash { to { stroke-dashoffset: -36; } }
   :global(.motion-paused) .leg.moving { animation-play-state: paused; }
