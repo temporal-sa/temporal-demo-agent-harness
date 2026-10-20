@@ -25,6 +25,8 @@ The console can also start **Ziggy (Conversational, Subagent)**, which hands eac
 
 ## Run it locally
 
+To present the demo, follow [RUNBOOK.md](RUNBOOK.md): the walkthrough beat by beat, and where in the code each part happens.
+
 You need [uv](https://docs.astral.sh/uv/), Node 22 or later, the [Temporal CLI](https://docs.temporal.io/cli), and a Gemini API key.
 
 ```bash
