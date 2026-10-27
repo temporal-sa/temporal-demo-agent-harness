@@ -21,13 +21,11 @@ import jsonpatch
 import pytest_asyncio
 from temporalio.client import Client
 from temporalio.contrib.pydantic import pydantic_data_converter
-from temporalio.contrib.workflow_streams import WorkflowStreamClient
 from tests.temporal_env import start_workflow_environment
 from temporalio.worker import Worker
 
 from temporal_agent_harness.harness.agent_protocol import (
     SEND_AGENT_MESSAGE_UPDATE,
-    TURN_EVENTS_TOPIC,
     AgentConfig,
     AgentEvent,
     AgentEventType,
@@ -36,6 +34,7 @@ from temporal_agent_harness.harness.agent_protocol import (
 )
 from temporal_agent_harness.plugin import AgentHarnessPlugin
 
+from agent_harness_demo import config
 from agent_harness_demo.ziggy import activities
 from agent_harness_demo.ziggy.trip_board import DEFAULT_TASKS
 from agent_harness_demo.ziggy.workflow import ZiggyDynamicAgentWorkflow
@@ -76,7 +75,7 @@ async def client_and_queue():
         env.client,
         task_queue=task_queue,
         workflows=[ZiggyDynamicAgentWorkflow],
-        plugins=[AgentHarnessPlugin(tools=activities.ALL_TOOLS)],
+        plugins=[AgentHarnessPlugin(tools=activities.ALL_TOOLS, event_stream=config.EVENT_STREAM)],
     ):
         try:
             yield env.client, task_queue
@@ -99,10 +98,7 @@ async def _run_script(client: Client, task_queue: str, script: str) -> list[Agen
     )
 
     events: list[AgentEvent] = []
-    stream = WorkflowStreamClient.create(client, handle.id)
-    async for item in stream.subscribe(
-        topics=[TURN_EVENTS_TOPIC], from_offset=0, result_type=AgentEvent
-    ):
+    async for item in config.EVENT_STREAM.subscribe(client, handle.id, from_offset=0):
         envelope: AgentEvent = item.data
         events.append(envelope)
         if envelope.event.type == AgentEventType.TURN_END:

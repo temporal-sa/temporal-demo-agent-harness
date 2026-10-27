@@ -85,6 +85,7 @@ A booking that was running when the worker died is retried when its 30-second st
 2. In the event history, point out:
    - `send_agent_message` Updates for each message, `tool_approval` Updates for each approval, and `provide_callback_result` Updates for each choice.
    - One Activity per search, booking, and seat (`search_flights`, `book_flight`, `select_seat`, `book_hotel`, `get_seat_map`). Open a booking that was interrupted in beat 4: its **ActivityTaskStarted** event shows attempt 2, and the last failure is `activity StartToClose timeout`.
+   - What isn't there: the reply text, tool events, and trip board changes the page streamed. Those went through Redis, so the history holds only the decisions and the work.
 3. Or click **Harness console** for the same session as the harness sees it: the state flow, the raw events, the **Agent state** pane with the trip board, and a replay scrubber. **← Demo view** in its top bar comes back.
 4. Say: "Every decision is in the history: what the model asked for, who approved it, and which attempt actually booked it."
 
@@ -96,7 +97,7 @@ Below the chat, **Approvals** switches the approval policy: **Ask for everything
 
 All links point at commit [`eda32ba`](https://github.com/temporal-sa/temporal-demo-agent-harness/commit/eda32ba59215508d8c97507683e1551d87d92363). Open a file locally with `code -g <path>:<line>`.
 
-The agent is built on the [Temporal Agent Harness](https://github.com/temporal-community/temporal-agent-harness) 0.6.0, pinned in `pyproject.toml`. The harness provides the turn loop, the approval gate, Code Mode, and the event stream; this repo supplies the tools, the prompt, and the policy.
+The agent is built on the [Temporal Agent Harness](https://github.com/temporal-community/temporal-agent-harness) 0.7.0 with its Redis event stream, pinned in `pyproject.toml`. The harness provides the turn loop, the approval gate, Code Mode, and the event stream; this repo supplies the tools, the prompt, and the policy.
 
 ### Gate every outside call on a person
 
@@ -364,7 +365,7 @@ When someone asks what they'd change for their own system, these are the parts t
 ## Reset and tear down
 
 - **Between runs:** press **New trip**. The old trip stays open in Temporal until its 24-hour execution timeout, but the page moves to the new one. To end a session sooner, terminate its Workflow from the Temporal UI.
-- **To stop locally:** stop the web, the worker, and the dev server with `Ctrl-C`. `temporal server start-dev` keeps its data in memory, so stopping it discards every session.
+- **To stop locally:** stop the web, the worker, Redis, and the dev server with `Ctrl-C`. `temporal server start-dev` and Redis keep their data in memory, so stopping them discards every session.
 - **On tmprl-demo.cloud:** press **Delete** on the environment card when you're done, or let it expire; **Extend +1h** gives you more time.
 
 ## When something goes wrong
@@ -372,6 +373,7 @@ When someone asks what they'd change for their own system, these are the parts t
 | What you see | Likely cause | Fix |
 |---|---|---|
 | `/` opens the harness console, not the demo view | The UI wasn't built | Run `(cd ui && npm ci && npm run build)` and restart the web process |
+| The web or worker logs a Redis connection error, or the worker logs `Dropping N events` | Redis isn't running, or the two processes have different `REDIS_URL`s | Start `redis-server`. The page streams nothing until it's back, but turns still finish; reload once it is |
 | The worker exits with "GEMINI_API_KEY is not set" | No key in the worker's environment | Export `GEMINI_API_KEY`; for the scripted trip any value works |
 | A message stays "Sending…" and the yellow **reconnecting** card shows | No worker is polling the Task Queue. A message is an Update, and a worker has to accept it | Start the worker. On tmprl-demo.cloud, press **Scale up workers** if the card shows "Workers scaled to zero" |
 | **thinking** runs for minutes | Gemini is slow to send its first token | Wait; the chat says so after 30 seconds. Past the 3-minute start-to-close timeout the Activity is retried |

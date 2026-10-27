@@ -8,12 +8,22 @@ x-app: &app
     TEMPORAL_NAMESPACE: default
     TEMPORAL_TASK_QUEUE: agent-harness
     PAYLOAD_DIR: /payloads
+    REDIS_URL: redis://redis:6379
+  depends_on:
+    - redis
   volumes:
     - payloads:/payloads
   extra_hosts:
     - "host.docker.internal:host-gateway"
 
 services:
+  # Agent events stream through Redis, not the agent Workflows' histories.
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "6379:6379"
+
   web:
     <<: *app
     command: ["web"]

@@ -2087,6 +2087,15 @@ wheels = [
 ]
 
 [[package]]
+name = "redis"
+version = "8.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/a8/99/604f0b666d4c616d891cf77ebb9db6bb21601344c051aebf1b72b9ff915f/redis-8.1.0.tar.gz", hash = "sha256:6e1a19beef9225c83efd689c7e6b7da2d5215b1f42cd13b7fc3714d0a09c7b25", size = 5254356, upload-time = "2026-07-30T08:51:00.269Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/66/9d/c5731f6e3608663d4d3656fd8d3aecee8b509c3082818f5a13eae925baea/redis-8.1.0-py3-none-any.whl", hash = "sha256:a4fe1aac3d3b3cc791d4b3d5931c5a956045dc951ee74d1c913ee3ac4d2ee9fb", size = 560618, upload-time = "2026-07-30T08:50:58.497Z" },
+]
+
+[[package]]
 name = "requests"
 version = "2.34.2"
 source = { registry = "https://pypi.org/simple" }
@@ -2299,15 +2308,12 @@ wheels = [
 
 [[package]]
 name = "temporal-agent-harness"
-version = "0.6.0"
-source = { registry = "https://pypi.org/simple" }
+version = "0.7.0"
+source = { git = "https://github.com/temporal-sa/temporal-agent-harness?rev=bac2e17e0643e714d42ca29df12c75cd5d10ccc2#bac2e17e0643e714d42ca29df12c75cd5d10ccc2" }
 dependencies = [
     { name = "pydantic" },
+    { name = "pyyaml" },
     { name = "temporalio" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/ee/9e/a57cc2d9ff330d3bc4ba7a799e581851a5567dc3a11361a86e5b913015d5/temporal_agent_harness-0.6.0.tar.gz", hash = "sha256:4f7762efe08bb9a9f8bbb20840c73793a93a6946c9dafff7f33d270f63cf755c", size = 624729, upload-time = "2026-10-03T00:51:08.002Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/0a/80/6c0e359a9561dc4b313b1fab178d06f411e5dee9b08f8e223d1afe5791e2/temporal_agent_harness-0.6.0-py3-none-any.whl", hash = "sha256:9a6a15bf3804a6ec6754b4dd7108435bbc396d4b986a60bcdcd721c5f475f534", size = 645924, upload-time = "2026-10-03T00:51:06.276Z" },
 ]
 
 [package.optional-dependencies]
@@ -2317,6 +2323,9 @@ code-mode = [
 genai = [
     { name = "google-auth" },
     { name = "google-genai" },
+]
+redis = [
+    { name = "redis" },
 ]
 s3 = [
     { name = "temporalio", extra = ["aioboto3"] },
@@ -2331,7 +2340,7 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "google-genai" },
-    { name = "temporal-agent-harness", extra = ["code-mode", "genai", "s3", "ui"] },
+    { name = "temporal-agent-harness", extra = ["code-mode", "genai", "redis", "s3", "ui"] },
 ]
 
 [package.dev-dependencies]
@@ -2345,7 +2354,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "google-genai", specifier = ">=2.8,<2.9" },
-    { name = "temporal-agent-harness", extras = ["genai", "code-mode", "ui", "s3"], specifier = "==0.6.0" },
+    { name = "temporal-agent-harness", extras = ["genai", "code-mode", "ui", "s3", "redis"], git = "https://github.com/temporal-sa/temporal-agent-harness?rev=bac2e17e0643e714d42ca29df12c75cd5d10ccc2" },
 ]
 
 [package.metadata.requires-dev]

@@ -18,14 +18,12 @@ import uuid
 import pytest_asyncio
 from temporalio.client import Client
 from temporalio.contrib.pydantic import pydantic_data_converter
-from temporalio.contrib.workflow_streams import WorkflowStreamClient
 from tests.temporal_env import start_workflow_environment
 from temporalio.worker import Worker
 
 from temporal_agent_harness.harness.agent_protocol import (
     AGENT_ID_LENGTH,
     SEND_AGENT_MESSAGE_UPDATE,
-    TURN_EVENTS_TOPIC,
     AgentConfig,
     AgentEvent,
     AgentEventType,
@@ -37,6 +35,7 @@ from temporal_agent_harness.plugin import AgentHarnessPlugin
 
 from temporal_agent_harness.harness.agent_client import AgentClient
 
+from agent_harness_demo import config
 from agent_harness_demo.ziggy import activities
 from agent_harness_demo.ziggy.workflow import ZiggyDynamicAgentWorkflow
 from ._subagent_e2e_parent import (
@@ -63,7 +62,7 @@ async def client_and_queue():
             ApprovalGatedSubagentParentWorkflow,
             ZiggyDynamicAgentWorkflow,
         ],
-        plugins=[AgentHarnessPlugin(tools=activities.ALL_TOOLS)],
+        plugins=[AgentHarnessPlugin(tools=activities.ALL_TOOLS, event_stream=config.EVENT_STREAM)],
     ):
         try:
             yield env.client, task_queue
@@ -96,12 +95,9 @@ async def _drive(
         result_type=AgentMessageReply,
     )
 
-    stream = WorkflowStreamClient.create(client, handle.id)
     reply: str | None = None
     events: list[AgentEvent] = []
-    async for item in stream.subscribe(
-        topics=[TURN_EVENTS_TOPIC], from_offset=0, result_type=AgentEvent
-    ):
+    async for item in config.EVENT_STREAM.subscribe(client, handle.id, from_offset=0):
         envelope: AgentEvent = item.data
         events.append(envelope)
         if envelope.event.type == AgentEventType.MESSAGE_HANDLER_END:
@@ -210,7 +206,7 @@ async def _merged_send(
         id=f"SubagentE2EParent-{uuid.uuid4()}",
         task_queue=task_queue,
     )
-    agent_client = AgentClient(client, handle.id)
+    agent_client = AgentClient(client, handle.id, event_stream=config.EVENT_STREAM)
     merged: list[AgentEvent] = []
     stream = await agent_client.send_message(
         "drive",
@@ -331,14 +327,13 @@ async def test_human_can_message_a_live_subagent_directly(client_and_queue):
     child_agent_id = started[0].event.subagent_id
 
     # The parent already drove turn 1 through the subagent-turn activity, so ours is turn 2.
-    child_client = AgentClient(client, child_workflow_id)
+    child_client = AgentClient(client, child_workflow_id, event_stream=config.EVENT_STREAM)
     reply = await child_client.submit_message("run_script", {"script": _const_script(7)})
     assert reply.turn_number == 2
 
-    stream = WorkflowStreamClient.create(client, child_workflow_id)
     own_turn: list[AgentEvent] = []
-    async for item in stream.subscribe(
-        topics=[TURN_EVENTS_TOPIC], from_offset=reply.accepted_offset, result_type=AgentEvent
+    async for item in config.EVENT_STREAM.subscribe(
+        client, child_workflow_id, from_offset=reply.accepted_offset
     ):
         envelope: AgentEvent = item.data
         if envelope.turn_id != reply.turn_id:
@@ -381,7 +376,7 @@ async def test_human_can_message_a_live_subagent_directly(client_and_queue):
 
     # Now the PARENT addresses the same child again. Its send lands as the child's turn 3,
     # after the human's — and the parent gets the reply, not a rejection.
-    parent_client = AgentClient(client, parent_id)
+    parent_client = AgentClient(client, parent_id, event_stream=config.EVENT_STREAM)
     parent_events: list[AgentEvent] = []
     stream = await parent_client.send_message(
         "drive_existing",
@@ -407,20 +402,18 @@ async def test_human_can_message_a_live_subagent_directly(client_and_queue):
     assert (await child_client.get_status()).current_turn == 3
 
 
-async def test_attach_after_stopped_subagent_degrades_gracefully(client_and_queue):
-    # The REAL graceful-degradation path (distinct from the LIVE merge above, which reads the
-    # child's detail in real time BEFORE the end-of-turn stop completes the child): here we drive
-    # the subagent and STOP it, so by the time we REATTACH it is a COMPLETED workflow. workflow_streams
-    # cannot read a completed workflow's stream, so the merge cannot mount the stopped child on
-    # replay — it must DEGRADE rather than wedge: release the child's close gate so the parent renders
-    # to its turn_end, and surface a non-fatal subagent_stream_unavailable marker for the child.
+async def test_attach_after_stopped_subagent_replays_its_turns(client_and_queue):
+    # Drive the subagent and STOP it, so by the time we REATTACH it is a COMPLETED workflow. Its
+    # events are in Redis, not in the workflow, so a completed child's stream is still readable:
+    # the merge mounts the stopped child on replay and renders its turns, rather than degrading
+    # to a subagent_stream_unavailable marker as it had to when events lived in a WorkflowStream.
     client, task_queue = client_and_queue
     parent_id, _live = await _merged_send(
         client, task_queue, [_const_script(42), _const_script(99)], stop=True
     )
 
     # Reattach from the start: the parent's backlog still references the now-completed subagent.
-    agent_client = AgentClient(client, parent_id)
+    agent_client = AgentClient(client, parent_id, event_stream=config.EVENT_STREAM)
     attached: list[AgentEvent] = []
     async for item in await agent_client.attach(
         on_item=lambda it, _o: it, from_offset=0, subagent_stall_grace_seconds=2.0
@@ -437,26 +430,19 @@ async def test_attach_after_stopped_subagent_degrades_gracefully(client_and_queu
     assert len(child_ids) == 1
     child_id = next(iter(child_ids))
 
-    # The parent stream rendered FULLY despite the unreadable child — its turn_end is present (the
-    # dead child's never-coming turn_end did not strand the parent's tail behind the close gate).
     parent_events = [e for e in attached if e.agent_id != child_id]
     assert parent_events[-1].event.type == AgentEventType.TURN_END
 
-    # A non-fatal marker was surfaced for the stopped subagent (its own turn DETAIL is forgone), and
-    # no actual child turn detail leaked onto the merged stream.
-    markers = [
+    # The stopped child's own turns replay in full, with nothing marked unavailable.
+    assert not [
+        e for e in attached if e.event.type == AgentEventType.SUBAGENT_STREAM_UNAVAILABLE
+    ]
+    child_turn_ends = [
         e
         for e in attached
-        if e.event.type == AgentEventType.SUBAGENT_STREAM_UNAVAILABLE
+        if e.agent_id == child_id and e.event.type == AgentEventType.TURN_END
     ]
-    assert markers and all(m.event.subagent_id == child_id for m in markers)
-    child_detail = [
-        e
-        for e in attached
-        if e.agent_id == child_id
-        and e.event.type != AgentEventType.SUBAGENT_STREAM_UNAVAILABLE
-    ]
-    assert not child_detail
+    assert len(child_turn_ends) == 2
 
 
 async def test_gated_concurrent_dispatches_get_distinct_turn_numbers(client_and_queue):
@@ -483,13 +469,10 @@ async def test_gated_concurrent_dispatches_get_distinct_turn_numbers(client_and_
         result_type=AgentMessageReply,
     )
 
-    agent_client = AgentClient(client, handle.id)
-    stream = WorkflowStreamClient.create(client, handle.id)
+    agent_client = AgentClient(client, handle.id, event_stream=config.EVENT_STREAM)
     approved: set[str] = set()
     messaged: list[AgentEvent] = []
-    async for item in stream.subscribe(
-        topics=[TURN_EVENTS_TOPIC], from_offset=0, result_type=AgentEvent
-    ):
+    async for item in config.EVENT_STREAM.subscribe(client, handle.id, from_offset=0):
         ev = item.data.event
         # Approve each gated send as soon as it asks — independent of arrival order.
         if ev.type == AgentEventType.TOOL_APPROVAL_REQUESTED and ev.tool_id not in approved:

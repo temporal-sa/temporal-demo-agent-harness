@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Ziggy, a durable travel agent on the Temporal Agent Harness, packaged for the tmprl-demo.cloud catalog."
 requires-python = ">=3.12"
 dependencies = [
-    "temporal-agent-harness[genai,code-mode,ui,s3]==0.6.0",
+    "temporal-agent-harness[genai,code-mode,ui,s3,redis]==0.7.0",
     # The harness's Gemini plugin imports google.genai._interactions, which 2.9.0 removed.
     # The harness only asks for >=2.0.0; this matches the 2.8.0 its own lockfile tests.
     "google-genai>=2.8,<2.9",
@@ -20,6 +20,9 @@ dev = [
 
 [tool.uv]
 package = false
+
+[tool.uv.sources]
+temporal-agent-harness = { git = "https://github.com/temporal-sa/temporal-agent-harness", rev = "bac2e17e0643e714d42ca29df12c75cd5d10ccc2" }
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

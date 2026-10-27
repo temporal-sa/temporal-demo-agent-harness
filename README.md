@@ -27,10 +27,11 @@ The console can also start **Ziggy (Conversational, Subagent)**, which hands eac
 
 To present the demo, follow [RUNBOOK.md](RUNBOOK.md): the walkthrough beat by beat, and where in the code each part happens.
 
-You need [uv](https://docs.astral.sh/uv/), Node 22 or later, the [Temporal CLI](https://docs.temporal.io/cli), and a Gemini API key.
+You need [uv](https://docs.astral.sh/uv/), Node 22 or later, the [Temporal CLI](https://docs.temporal.io/cli), Redis (`brew install redis`), and a Gemini API key.
 
 ```bash
 temporal server start-dev
+redis-server --save "" --appendonly no         # agent events stream through here
 (cd ui && npm ci && npm run build)             # builds the demo view into agent_harness_demo/ui_dist
 export TEMPORAL_ADDRESS=localhost:7233 GEMINI_API_KEY=...
 uv run python -m agent_harness_demo worker     # terminal 1
@@ -48,13 +49,13 @@ It prints a link to open. Stop the worker while a booking runs to see the delaye
 
 Without the UI build, `/` redirects to the console. To work on the demo view, run `npm run dev` in `ui/` and open http://localhost:5173; it proxies the API to the web process on :8000.
 
-Or run both processes in containers against the same dev server:
+Or run both processes, and Redis, in containers against the same dev server:
 
 ```bash
 GEMINI_API_KEY=... docker compose up --build
 ```
 
-Run the tests with `uv run pytest`. They start their own dev server and need no API key.
+Run the tests with `uv run pytest`. They start their own dev server and Redis, so they need `redis-server` on your `PATH` but no API key.
 
 ## How it's put together
 
@@ -66,10 +67,10 @@ agent_harness_demo/
   config.py     environment settings shared by both processes
 ui/                         the demo view: Svelte 5 on @temporalio/agent-harness-svelte
   src/generated/            TypeScript types for ZiggyChatAgent, generated from the Python class
-deploy/agent-harness.yaml   draft DemoProject for the registry
+redis.Dockerfile            the Redis image for the catalog's redis component
 ```
 
-The harness comes from PyPI, pinned to `temporal-agent-harness==0.6.0`. The console is served unchanged from the installed package. The demo view uses the harness's npm packages, `@temporalio/agent-harness-svelte` and `-client` 0.1.0, which follow a session's event stream and expose its messages, pending approvals, and the `trip_board` state. It calls the same routes as the console, so it gets the same per-person scoping. The Dockerfile builds it in a Node stage; the runtime image has no Node.
+The harness is `temporal-agent-harness` 0.7.0 with the Redis event stream added, built from the `redis-event-streams-0.7.0` branch of [temporal-sa/temporal-agent-harness](https://github.com/temporal-sa/temporal-agent-harness) and pinned to a commit in `pyproject.toml`. The Redis backend isn't in a PyPI release yet; see [Event streams](#event-streams). The console is served unchanged from the installed package. The demo view uses the harness's npm packages, `@temporalio/agent-harness-svelte` and `-client` 0.1.0, which follow a session's event stream and expose its messages, pending approvals, and the `trip_board` state. It calls the same routes as the console, so it gets the same per-person scoping. The Dockerfile builds it in a Node stage; the runtime image has no Node.
 
 When the agent's handlers or `TripBoard` change, regenerate the types. The generator ships in the harness repo, not on npm:
 
@@ -85,7 +86,20 @@ Changes from the upstream example:
 - **No session-manager Workflow.** The harness's web app keeps one long-running session manager per namespace and lists every agent in the namespace. Here, the API starts each agent Workflow directly and lists sessions with a Visibility query on the caller's ID prefix.
 - **Per-person isolation.** Session IDs are `<task queue>.<owner>.<session>`, where `owner` is a hash of `X-Temporal-Auth-Subject`. Every route that names a session returns 404 unless the caller owns it, or owns the agent that started it as a subagent.
 - **Task queue from one variable.** The web and worker processes both read `TEMPORAL_TASK_QUEUE`. Subagents run on their parent's queue (`workflow.info().task_queue`) rather than a hard-coded one.
+- **Events stream through Redis.** Agents publish to `RedisEventStream()` instead of a `WorkflowStream`, so streaming adds nothing to their histories. See [Event streams](#event-streams).
 - **Bounded sessions.** Agents wait for messages indefinitely, so every session starts with a Workflow execution timeout (`SESSION_TIMEOUT_HOURS`, 24 by default). Subagents close with their parent.
+
+## Event streams
+
+Everything the page shows as it happens (reply text, tool calls, approvals, choice cards, trip board changes) is an event the harness publishes for the session. In the upstream example those events live in the agent Workflow as a `WorkflowStream`: each batch an Activity publishes is a Signal, and each read by the page is an Update. Every turn fills the history with Signals and Updates that have nothing to do with what the agent decided, and they bury the Activities and approvals you want to show.
+
+Here every agent is built with `RedisEventStream()`, so events go to one Redis Stream per session instead:
+
+- **Workflow code** hands its events to a writer that the worker's `AgentHarnessPlugin(event_stream=...)` runs. Nothing is written during replay, and a retried Workflow Task doesn't write twice.
+- **Activities** write to Redis directly.
+- **The web process** reads Redis for each session's SSE connection, through `AgentClient(event_stream=...)`. The browser never talks to Redis.
+
+The history keeps the messages, approvals, choices, and Activities, and no stream Signals or Updates (`tests/ziggy/test_workflow.py` checks this). The stream is a live view, not the record: a message's result and any pending approvals are read from the Workflow, so losing Redis loses only the replay of past events, never a booking or an approval.
 
 ## Configuration
 
@@ -94,6 +108,7 @@ Changes from the upstream example:
 | `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, `TEMPORAL_API_KEY`, `TEMPORAL_TLS*` | both | `localhost:7233`, `default` | Temporal connection. `temporal.toml` files are ignored. |
 | `TEMPORAL_TASK_QUEUE` | both | `agent-harness` | Queue for every agent. The catalog sets it per workspace. |
 | `GEMINI_API_KEY` | worker | required | Model calls. |
+| `REDIS_URL` | both | `redis://localhost:6379` | Where agent events stream. Web and worker must use the same Redis. |
 | `PAYLOAD_BUCKET` | both | unset | S3 bucket for payloads over 1.5 MB. |
 | `PAYLOAD_DIR` | both | harness default | Local directory for those payloads when no bucket is set. Web and worker must share it. |
 | `TRUST_AUTH_HEADERS` | web | `false` | Read the user from `X-Temporal-Auth-Subject`. Set it only behind the catalog ingress. |
@@ -104,21 +119,27 @@ Changes from the upstream example:
 
 ## Catalog decisions
 
+The catalog deploys this demo from [`projects/demo/agent-harness.yaml`](https://github.com/temporal-sa/tmprl-demo-cloud-registry/blob/main/projects/demo/agent-harness.yaml) in the registry repo; this repo has no copy of it.
+
 1. **Session boundary:** the signed-in person, read from `X-Temporal-Auth-Subject`, which the catalog's forward-auth sets and the ingress strips from client requests. Each crashable-workspace share-link guest gets their own `share:<id>` subject.
 2. **Scoping:** Workflow IDs start with `<task queue>.<sha256(subject)[:16]>.`. Listing, status, streams, messages, approvals and close all check that prefix. A subagent is allowed when its parent has the prefix.
 3. **Task queue:** `TEMPORAL_TASK_QUEUE`, with base `agent-harness`. The API starts agents on it, and subagents inherit it from their parent.
 4. **Sharing a namespace across workspaces:** the queue is part of every Workflow ID, and listing also filters on `TaskQueue`. Payload objects in S3 are keyed by content hash.
-5. **Builds and components:** one image with two components: `web` (`args: [web]`, `temporalAccess`) and `worker` (`args: [worker]`, versioned, PINNED).
+5. **Builds and components:** the app image runs two components: `web` (`args: [web]`, `temporalAccess`) and `worker` (`args: [worker]`, versioned, PINNED). A third component, `redis`, built from `redis.Dockerfile`, holds the event streams in memory with a password, no persistence, and LRU eviction at 256 MB. A crashable workspace clones it with the rest of the namespace, and **Crash Workers** leaves it running.
 6. **Routes:** one ingress host, served by `web` on port 8000: the demo view at `/`, the console at `/console/`, and the API at `/api/` and `/console/api/`. Both views call relative `api/...` paths.
 7. **Temporal credentials:** injected by the platform as `TEMPORAL_*` environment variables.
-8. **Secrets and external state:** the shared `gemini` secret (worker only). Payloads use the S3 bucket and IAM role that Monty uses today. See the known gaps below.
+8. **Secrets and external state:** the shared `gemini` secret (worker only), and a project `runtime` secret holding `REDIS_PASSWORD` (web, worker, and redis), which has to be created at `tmprl-dem-cld/agent-harness/runtime` before the first deploy. Use an alphanumeric password, because it is spliced into `REDIS_URL`. Payloads use the S3 bucket and IAM role that Monty uses today. See the known gaps below.
 9. **Smoke check:** `GET /api/health`. It needs no sign-in and touches no state.
 10. **Known gaps:** listed below.
 
 ## Known gaps
 
+- **The harness comes from a fork.** `RedisEventStream` exists only on the temporal-sa fork, backported onto the 0.7.0 release. Once upstream ships it, go back to a PyPI pin.
+- **Event streams aren't trimmed.** The harness never expires a session's stream, so Redis evicts the least recently used sessions when it reaches its memory limit. A session that old has timed out anyway.
+- **Sessions running at the Redis cutover.** Sessions started before the switch are pinned to the old version and keep writing events into their Workflows, but the web process reads only Redis, so the page won't stream them. They still finish, and the Temporal UI still shows them. New sessions are unaffected.
+
 - **IAM trust for the payload role.** The payload bucket's IAM role, shared with today's Monty project, trusts Monty's service accounts only. The new `agent-harness` project and its crashable namespaces need to be added before cutover, or the bucket and role need replacing with ones named for this project.
 - **`google-genai` cap.** The harness's Gemini plugin imports `google.genai._interactions`, which `google-genai` 2.9.0 removed. The harness declares only `>=2.0.0`, so `pyproject.toml` caps it at `<2.9`. This is worth reporting upstream.
 - **Messages wait for a worker.** Sending a message is a Workflow Update, which a worker must accept. While no worker runs, the send stays open and the demo view says so; it goes through when a worker returns, unless the browser gives up on the request first.
 - **Private harness helpers.** `web.py` imports a few private helpers from `temporal_agent_harness.web.app`, so that the UI gets byte-identical responses. That's safe only while the harness version is pinned. Review them when upgrading.
-- **Upgrade path.** Bump the harness pin, re-copy `examples/monty` from the matching tag, and keep the two local changes: no hard-coded queue, and subagents inherit their parent's queue. Workflow changes ship as a new Worker Deployment Version without patching, because agents are PINNED.
+- **Upgrade path.** Bump the harness pin, re-copy `examples/monty` from the matching tag, and keep the three local changes: no hard-coded queue, subagents inherit their parent's queue, and `stream=RedisEventStream()`. Workflow changes ship as a new Worker Deployment Version without patching, because agents are PINNED.

@@ -22,7 +22,6 @@ value becomes the turn's reply.
 from __future__ import annotations
 
 from temporalio import workflow
-from temporalio.contrib.workflow_streams import WorkflowStream
 
 with workflow.unsafe.imports_passed_through():
     from temporal_agent_harness.harness import agent
@@ -33,6 +32,7 @@ with workflow.unsafe.imports_passed_through():
         ToolApprovalPolicy,
     )
     from temporal_agent_harness.harness.agent_workflow import AgentWorkflowRunner
+    from temporal_agent_harness.harness.redis_event_stream import RedisEventStream
 
     from . import activities, choices, trip_board
     from .models import RunScript
@@ -48,7 +48,8 @@ class ZiggyDynamicAgentWorkflow:
     def __init__(self, config: AgentConfig) -> None:
         self._runner = AgentWorkflowRunner(
             config,
-            stream=WorkflowStream(),
+            # Events go to Redis through the worker's writer, not into this Workflow's history.
+            stream=RedisEventStream(),
             # The travel tools run inside a sandboxed simulation (no real-world side effects),
             # so this agent skips approvals by default. A caller can still tighten this per
             # session via AgentConfig.approval_policy.

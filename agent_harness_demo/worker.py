@@ -45,11 +45,16 @@ async def run() -> None:
         raise SystemExit("GEMINI_API_KEY is not set; the conversational agents need it.")
     storage = await config.payload_storage()
     # The harness plugin goes last so its payload converter, shared with the web process,
-    # wraps the Gemini plugin's. It also registers the travel tools as activities.
+    # wraps the Gemini plugin's. It also registers the travel tools as activities, and runs
+    # the writer that sends the agents' events to Redis.
     client = await config.connect(
         [
             GoogleGenAIPlugin(GeminiClient(api_key=api_key)),
-            AgentHarnessPlugin(tools=activities.ALL_TOOLS, large_payload_offload=storage),
+            AgentHarnessPlugin(
+                tools=activities.ALL_TOOLS,
+                large_payload_offload=storage,
+                event_stream=config.EVENT_STREAM,
+            ),
         ]
     )
     worker = Worker(

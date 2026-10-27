@@ -196,7 +196,9 @@ def create_app() -> FastAPI:
 
     async def owned_agent(prefix: str, session_id: str) -> AgentClient:
         await require_owned(temporal(), prefix, session_id)
-        return AgentClient(temporal=temporal(), workflow_id=session_id)
+        return AgentClient(
+            temporal=temporal(), workflow_id=session_id, event_stream=config.EVENT_STREAM
+        )
 
     @api.get("/health")
     async def health():

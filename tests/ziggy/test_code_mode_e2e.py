@@ -17,7 +17,6 @@ import pytest_asyncio
 from temporalio import workflow
 from temporalio.client import Client, WorkflowHandle
 from temporalio.contrib.pydantic import pydantic_data_converter
-from temporalio.contrib.workflow_streams import WorkflowStreamClient
 from tests.temporal_env import start_workflow_environment
 from temporalio.worker import (
     Interceptor,
@@ -31,7 +30,6 @@ from temporalio.worker import (
 
 from temporal_agent_harness.harness.agent_protocol import (
     SEND_AGENT_MESSAGE_UPDATE,
-    TURN_EVENTS_TOPIC,
     AgentConfig,
     AgentEvent,
     AgentEventType,
@@ -39,6 +37,8 @@ from temporal_agent_harness.harness.agent_protocol import (
     AgentMessageReply,
 )
 from temporal_agent_harness.plugin import AgentHarnessPlugin
+
+from agent_harness_demo import config
 
 from ._code_mode_e2e_parent import CODE_MODE_TOOLS, CodeModeE2EParentWorkflow
 
@@ -80,7 +80,7 @@ async def client_and_queue():
         workflows=[CodeModeE2EParentWorkflow],
         # The plugin supplies the durable bodies of the host tools; Code Mode needs no
         # activities of its own.
-        plugins=[AgentHarnessPlugin(tools=CODE_MODE_TOOLS)],
+        plugins=[AgentHarnessPlugin(tools=CODE_MODE_TOOLS, event_stream=config.EVENT_STREAM)],
         interceptors=[_RecordScheduledActivities()],
     ):
         try:
@@ -128,12 +128,9 @@ async def _run_with_handle(
         result_type=AgentMessageReply,
     )
 
-    stream = WorkflowStreamClient.create(client, handle.id)
     reply: str | None = None
     events: list[AgentEvent] = []
-    async for item in stream.subscribe(
-        topics=[TURN_EVENTS_TOPIC], from_offset=0, result_type=AgentEvent
-    ):
+    async for item in config.EVENT_STREAM.subscribe(client, handle.id, from_offset=0):
         envelope: AgentEvent = item.data
         events.append(envelope)
         if envelope.event.type == AgentEventType.MESSAGE_HANDLER_END:

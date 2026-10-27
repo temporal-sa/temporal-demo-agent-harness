@@ -15,13 +15,11 @@ import uuid
 import pytest_asyncio
 from temporalio.client import Client
 from temporalio.contrib.pydantic import pydantic_data_converter
-from temporalio.contrib.workflow_streams import WorkflowStreamClient
 from tests.temporal_env import start_workflow_environment
 from temporalio.worker import Worker
 
 from temporal_agent_harness.harness.agent_protocol import (
     SEND_AGENT_MESSAGE_UPDATE,
-    TURN_EVENTS_TOPIC,
     AgentConfig,
     AgentEvent,
     AgentEventType,
@@ -31,6 +29,7 @@ from temporal_agent_harness.harness.agent_protocol import (
 
 from temporal_agent_harness.plugin import AgentHarnessPlugin
 
+from agent_harness_demo import config
 from agent_harness_demo.ziggy import activities
 from agent_harness_demo.ziggy.workflow import ZiggyDynamicAgentWorkflow
 
@@ -48,7 +47,7 @@ async def client_and_queue():
         env.client,
         task_queue=task_queue,
         workflows=[ZiggyDynamicAgentWorkflow],
-        plugins=[AgentHarnessPlugin(tools=activities.ALL_TOOLS)],
+        plugins=[AgentHarnessPlugin(tools=activities.ALL_TOOLS, event_stream=config.EVENT_STREAM)],
     ):
         try:
             yield env.client, task_queue
@@ -57,13 +56,8 @@ async def client_and_queue():
 
 
 async def _reply_text(client: Client, workflow_id: str) -> str:
-    stream = WorkflowStreamClient.create(client, workflow_id)
     reply: str | None = None
-    async for item in stream.subscribe(
-        topics=[TURN_EVENTS_TOPIC],
-        from_offset=0,
-        result_type=AgentEvent,
-    ):
+    async for item in config.EVENT_STREAM.subscribe(client, workflow_id, from_offset=0):
         envelope: AgentEvent = item.data
         if envelope.event.type == AgentEventType.MESSAGE_HANDLER_END:
             # run_script returns a TextReply; read its text off the output dict.
@@ -185,3 +179,32 @@ async def test_a_seat_for_a_booking_that_does_not_match_is_refused(client_and_qu
     script = _select_seat_script(seat_cabin="premium", claimed_fare="premium")
     reply = await _run_script_reply(client, task_queue, script)
     assert "use the details book_flight returned" in reply
+
+
+async def test_streaming_leaves_no_signals_or_updates_in_history(client_and_queue):
+    # Events go to Redis, so a whole turn (script, tool calls, trip board changes) leaves only
+    # the message update and the activities in the agent's history: no WorkflowStream publish
+    # Signals from activities and no poll Updates from readers.
+    client, task_queue = client_and_queue
+    handle = await client.start_workflow(
+        ZiggyDynamicAgentWorkflow.run,
+        AgentConfig(),
+        id=f"ZiggyDynamicAgent-{uuid.uuid4()}",
+        task_queue=task_queue,
+    )
+    await handle.execute_update(
+        SEND_AGENT_MESSAGE_UPDATE,
+        AgentMessage(type="run_script", payload={"script": _select_seat_script("premium", "economy")}),
+        result_type=AgentMessageReply,
+    )
+    await _reply_text(client, handle.id)
+
+    signals, updates = [], []
+    async for event in handle.fetch_history_events():
+        if event.HasField("workflow_execution_signaled_event_attributes"):
+            signals.append(event.workflow_execution_signaled_event_attributes.signal_name)
+        if event.HasField("workflow_execution_update_accepted_event_attributes"):
+            attributes = event.workflow_execution_update_accepted_event_attributes
+            updates.append(attributes.accepted_request.input.name)
+    assert signals == []
+    assert updates == [SEND_AGENT_MESSAGE_UPDATE]

@@ -10,17 +10,27 @@ from temporalio.client import Client, Plugin
 from temporalio.converter import ExternalStorage
 from temporalio.envconfig import ClientConfig
 
+from temporal_agent_harness.harness.redis_event_stream import RedisEventStream
 from temporal_agent_harness.utils.large_payload import local_payload_storage, s3_payload_storage
 
 REGISTRY_PATH = Path(__file__).parent / "ziggy" / "agents.toml"
 
 # The catalog injects a per-workspace queue (`agent-harness-<workspace>`) into every
-# component through this variable; see `crashable.taskQueueEnv` in the DemoProject.
+# component through this variable; see `crashable.taskQueueEnv` in the registry's
+# projects/demo/agent-harness.yaml.
 TASK_QUEUE = os.environ.get("TEMPORAL_TASK_QUEUE", "agent-harness")
 
 # Agents wait for their next message indefinitely, so an abandoned session is closed by
 # Temporal when this runs out. Subagents close with their parent.
 SESSION_TIMEOUT = timedelta(hours=float(os.environ.get("SESSION_TIMEOUT_HOURS", "24")))
+
+# Agent events (turn lifecycle, reply deltas, tool calls, approvals, trip board changes) are
+# streamed through Redis rather than the agent Workflow, so they cost no Signals, Updates, or
+# history. The worker writes them and the web process reads them, so both use this URL.
+REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379")
+
+# One instance per process: the worker's plugin runs a single writer for it.
+EVENT_STREAM = RedisEventStream(REDIS_URL)
 
 
 def temporal_ui_url(namespace: str) -> str:

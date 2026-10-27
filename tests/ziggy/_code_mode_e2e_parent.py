@@ -18,7 +18,6 @@ resolution (the same convention every activity-defining module in this repo foll
 from datetime import timedelta
 
 from temporalio import workflow
-from temporalio.contrib.workflow_streams import WorkflowStream
 from temporalio.exceptions import ApplicationError
 from temporalio.workflow import ActivityConfig
 
@@ -32,6 +31,7 @@ with workflow.unsafe.imports_passed_through():
         ToolApprovalPolicy,
     )
     from temporal_agent_harness.harness.agent_workflow import AgentWorkflowRunner
+    from temporal_agent_harness.harness.redis_event_stream import RedisEventStream
 
 
 _ACTIVITY_CONFIG = ActivityConfig(start_to_close_timeout=timedelta(seconds=10))
@@ -112,7 +112,7 @@ class CodeModeE2EParentWorkflow:
     def __init__(self, config: AgentConfig) -> None:
         self._runner = AgentWorkflowRunner(
             config,
-            stream=WorkflowStream(),
+            stream=RedisEventStream(),
             # Skip approvals so the test drives host calls without an approver in the loop.
             approval_policy_default=ToolApprovalPolicy.dangerously_skip_all(),
         )

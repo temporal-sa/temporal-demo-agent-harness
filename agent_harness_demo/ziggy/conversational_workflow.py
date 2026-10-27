@@ -23,7 +23,6 @@ from typing import Literal
 
 from pydantic import BaseModel
 from temporalio import workflow
-from temporalio.contrib.workflow_streams import WorkflowStream
 from temporalio.workflow import ActivityConfig
 
 with workflow.unsafe.imports_passed_through():
@@ -48,6 +47,7 @@ with workflow.unsafe.imports_passed_through():
         ToolApprovalPolicy,
     )
     from temporal_agent_harness.harness.agent_workflow import AgentWorkflowRunner
+    from temporal_agent_harness.harness.redis_event_stream import RedisEventStream
 
     from . import activities, choices, trip_board
     from .models import TravelerContext
@@ -183,7 +183,8 @@ class ZiggyChatAgentWorkflow:
         self._instruction = system_instruction(SYSTEM_INSTRUCTION, data)
         self._runner = AgentWorkflowRunner(
             config,
-            stream=WorkflowStream(),
+            # Events go to Redis through the worker's writer, not into this Workflow's history.
+            stream=RedisEventStream(),
             # Demo stance: require human approval for EVERY tool call that reaches the outside
             # world — both the `run_travel_code` tool and each travel host call the script makes
             # (search/book flights & hotels), since every call is dispatched through run_tool and
@@ -215,7 +216,7 @@ class ZiggyChatAgentWorkflow:
             injections={"board": self.trip_board},
         )
         # The Temporal-aware AsyncClient from the Gemini plugin; the runner is wired in so reply
-        # text streams to the workflow stream as it is generated.
+        # text streams to the event stream as it is generated.
         self._gemini = google_genai_client(
             activity_config=ActivityConfig(
                 start_to_close_timeout=timedelta(minutes=3),

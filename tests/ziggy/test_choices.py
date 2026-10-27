@@ -10,13 +10,11 @@ import uuid
 
 import pytest_asyncio
 from temporalio.contrib.pydantic import pydantic_data_converter
-from temporalio.contrib.workflow_streams import WorkflowStreamClient
 from temporalio.worker import Worker
 
 from temporal_agent_harness.harness.agent_client import AgentClient
 from temporal_agent_harness.harness.agent_protocol import (
     SEND_AGENT_MESSAGE_UPDATE,
-    TURN_EVENTS_TOPIC,
     AgentConfig,
     AgentEvent,
     AgentEventType,
@@ -25,6 +23,7 @@ from temporal_agent_harness.harness.agent_protocol import (
 )
 from temporal_agent_harness.plugin import AgentHarnessPlugin
 
+from agent_harness_demo import config
 from agent_harness_demo.ziggy import activities
 from agent_harness_demo.ziggy.workflow import ZiggyDynamicAgentWorkflow
 from tests.temporal_env import start_workflow_environment
@@ -59,7 +58,7 @@ async def client_and_queue():
         env.client,
         task_queue=task_queue,
         workflows=[ZiggyDynamicAgentWorkflow],
-        plugins=[AgentHarnessPlugin(tools=activities.ALL_TOOLS)],
+        plugins=[AgentHarnessPlugin(tools=activities.ALL_TOOLS, event_stream=config.EVENT_STREAM)],
     ):
         try:
             yield env.client, task_queue
@@ -82,16 +81,13 @@ async def test_the_travelers_pick_comes_back_to_the_script(client_and_queue):
     )
 
     reply = None
-    stream = WorkflowStreamClient.create(client, handle.id)
-    async for item in stream.subscribe(
-        topics=[TURN_EVENTS_TOPIC], from_offset=0, result_type=AgentEvent
-    ):
+    async for item in config.EVENT_STREAM.subscribe(client, handle.id, from_offset=0):
         event = item.data.event
         if event.type == AgentEventType.CALLBACK_REQUESTED:
             options = event.tool_input["request"]["options"]
             assert len(options) == 2
             # Pick the second option in business, as a click on its fare button would.
-            await AgentClient(temporal=client, workflow_id=handle.id).provide_callback_result(
+            await AgentClient(temporal=client, workflow_id=handle.id, event_stream=config.EVENT_STREAM).provide_callback_result(
                 event.tool_id,
                 result={"option_id": options[1]["option_id"], "fare": "business", "comment": None},
             )
@@ -139,14 +135,11 @@ async def test_the_travelers_hotel_comes_back_to_the_script(client_and_queue):
 
     reply = None
     picked = None
-    stream = WorkflowStreamClient.create(client, handle.id)
-    async for item in stream.subscribe(
-        topics=[TURN_EVENTS_TOPIC], from_offset=0, result_type=AgentEvent
-    ):
+    async for item in config.EVENT_STREAM.subscribe(client, handle.id, from_offset=0):
         event = item.data.event
         if event.type == AgentEventType.CALLBACK_REQUESTED:
             picked = event.tool_input["request"]["options"][1]["hotel_id"]
-            await AgentClient(temporal=client, workflow_id=handle.id).provide_callback_result(
+            await AgentClient(temporal=client, workflow_id=handle.id, event_stream=config.EVENT_STREAM).provide_callback_result(
                 event.tool_id, result={"hotel_id": picked, "comment": None}
             )
         if event.type == AgentEventType.MESSAGE_HANDLER_END:
