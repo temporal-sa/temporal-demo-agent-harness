@@ -99,7 +99,8 @@ Changes from the upstream example:
 | `TRUST_AUTH_HEADERS` | web | `false` | Read the user from `X-Temporal-Auth-Subject`. Set it only behind the catalog ingress. |
 | `DEV_USER` | web | `local-dev` | The user when auth headers aren't trusted. |
 | `SESSION_TIMEOUT_HOURS` | web | `24` | Execution timeout for each session. |
-| `TEMPORAL_UI_URL` | web | Cloud or `localhost:8233`, from the address | Namespace URL in the Temporal UI, for the demo view's **Temporal UI** link. |
+| `TEMPORAL_UI_URL` | web | Cloud or `localhost:8233`, from the address | Base URL of the Temporal UI, for the demo view's **Temporal UI** link. A full namespace URL is used as it is. |
+| `TEMPORAL_UI_NAMESPACE` | web | The connected namespace | Namespace that link opens under `TEMPORAL_UI_URL`. |
 | `TEMPORAL_DEPLOYMENT_NAME`, `TEMPORAL_WORKER_BUILD_ID` | worker | unset | Set by the catalog's Worker Controller to turn on Worker Versioning. |
 
 ## Catalog decisions

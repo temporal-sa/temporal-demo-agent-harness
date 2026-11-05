@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from datetime import timedelta
 from pathlib import Path
+from urllib.parse import quote
 
 from temporalio.client import Client, Plugin
 from temporalio.converter import ExternalStorage
@@ -24,9 +25,16 @@ SESSION_TIMEOUT = timedelta(hours=float(os.environ.get("SESSION_TIMEOUT_HOURS", 
 
 
 def temporal_ui_url(namespace: str) -> str:
-    """Base URL for this namespace in the Temporal UI, for links from the demo view."""
+    """Base URL for this namespace in the Temporal UI, for links from the demo view.
+
+    The demo platform injects TEMPORAL_UI_URL as the UI's base (https://cloud.temporal.io,
+    or a crashable workspace's dev server UI) and TEMPORAL_UI_NAMESPACE as the namespace.
+    """
     if url := os.environ.get("TEMPORAL_UI_URL"):
-        return url.rstrip("/")
+        url = url.rstrip("/")
+        if "/namespaces/" in url:
+            return url  # already a namespace page
+        return f"{url}/namespaces/{quote(os.environ.get('TEMPORAL_UI_NAMESPACE') or namespace, safe='')}"
     if os.environ.get("TEMPORAL_ADDRESS", "").endswith(".tmprl.cloud:7233"):
         return f"https://cloud.temporal.io/namespaces/{namespace}"
     return f"http://localhost:8233/namespaces/{namespace}"
