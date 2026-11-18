@@ -66,7 +66,7 @@ agent_harness_demo/
   config.py     environment settings shared by both processes
 ui/                         the demo view: Svelte 5 on @temporalio/agent-harness-svelte
   src/generated/            TypeScript types for ZiggyChatAgent, generated from the Python class
-deploy/agent-harness.yaml   draft DemoProject for the registry
+deploy/demoproject.yaml     copy of the catalog DemoProject (the platform repo has the live ones)
 ```
 
 The harness comes from PyPI, pinned to `temporal-agent-harness==0.6.0`. The console is served unchanged from the installed package. The demo view uses the harness's npm packages, `@temporalio/agent-harness-svelte` and `-client` 0.1.0, which follow a session's event stream and expose its messages, pending approvals, and the `trip_board` state. It calls the same routes as the console, so it gets the same per-person scoping. The Dockerfile builds it in a Node stage; the runtime image has no Node.

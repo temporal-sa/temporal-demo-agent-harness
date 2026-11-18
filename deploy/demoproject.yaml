@@ -1,0 +1,100 @@
+# Copy of this demo's DemoProject on the tmprl-demo.cloud catalog. The platform's copies, the ones
+# that run, are projects/test/demo/agent-harness.yaml (this file) and projects/live/demo/agent-harness.yaml
+# (live hosts and Temporal Cloud account, source branch main) in temporal-sa/temporal-fieldkit-platform.
+# Keep them in step; the contract is that repo's docs/crd-reference.md.
+apiVersion: registry.tmprl-demo.cloud/v1alpha1
+kind: DemoProject
+# spec.aws gives web and worker the payload bucket: the operator creates the bucket and its role
+# and sets PAYLOAD_BUCKET and the region on web and worker; crashable workspaces use the same
+# bucket with a role of their own. No crashable taskQueueEnv/baseTaskQueue: crashable workspaces
+# run their own dev server.
+metadata:
+  name: agent-harness
+  annotations:
+    registry.tmprl-demo.cloud/operator: v2
+spec:
+  registry:
+    title: Temporal Agent Kit (Travel Agent)
+    summary: >-
+      Built with Python on the Temporal Agent Kit, Gemini through Google
+      GenAI, and a pydantic-monty sandbox. Demonstrates each tool call as a
+      durable Activity, approval cards, and crash recovery mid-booking. Use
+      case: a travel agent that books trips with human approval.
+    tags: [AI Agents, Human-in-the-Loop, Travel]
+    temporalSdks: [Python]
+    aiSdks: [Google GenAI SDK, Temporal Agent Kit]
+    canonical: true
+    links:
+      slideDeck:
+        label: Temporal Agent Kit Pitch Deck
+        url: https://docs.google.com/presentation/d/1MdyLY2HI6U4i1crhIpxTqQIExmjMA18p8yyTzzl6La4
+      externalRecording:
+        label: Temporal Agent Kit explainer
+        url: https://github.com/user-attachments/assets/18a34eb2-fc6d-446d-9507-7fe4c870492f
+      additional:
+        - label: Agent Kit intro (15 min)
+          url: https://drive.google.com/file/d/1BD5KHuNLzAXSSVeTFzGiap2CXgnkRUCd/view
+          audience: technical
+      runbook:
+        label: Runbook
+        url: https://github.com/temporal-sa/temporal-demo-agent-harness/blob/main/RUNBOOK.md
+
+  source:
+    repo: https://github.com/temporal-sa/temporal-demo-agent-harness
+    branch: fieldkit/test
+
+  builds:
+    app:
+      context: .
+      dockerfile: Dockerfile
+
+  secrets:
+    gemini:
+      shared: gemini
+      requiredProperties: [GEMINI_API_KEY]
+    # Real flight search through SerpApi (Google Flights); without it, search is simulated.
+    serpapi:
+      requiredProperties: [SERPAPI_API_KEY]
+
+  components:
+    web:
+      build: app
+      args: [web]
+      temporalAccess: true
+      env:
+        # Read the signed-in user from the platform's forward-auth headers.
+        - name: TRUST_AUTH_HEADERS
+          value: "true"
+      ports:
+        - name: http
+          containerPort: 8000
+          servicePort: 80
+    worker:
+      build: app
+      args: [worker]
+      worker:
+        versioning:
+          enabled: true
+          deploymentName: agent-harness
+      # Scale-to-zero canary for versioned (PINNED) workers.
+      autoscaling:
+        taskQueue: agent-harness
+      secrets: [gemini, serpapi]
+
+  # Large payloads (sandbox snapshots, long histories) go to an operator-made S3 bucket,
+  # kept a while past the namespace's 7-day retention.
+  aws:
+    s3:
+      buckets:
+        payloads: {env: PAYLOAD_BUCKET, expirationDays: 30}
+
+  ingress:
+    subdomain: agent-harness
+    temporalAuthRequired: true
+    component: web
+    port: http
+
+  smokeCheck:
+    path: /api/health
+    expectedStatus: 200
+    timeoutSeconds: 15
