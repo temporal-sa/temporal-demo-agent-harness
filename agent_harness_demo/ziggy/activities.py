@@ -1,7 +1,9 @@
-"""Simulated travel-booking activity implementations.
+"""Travel-booking activity implementations.
 
-These activities return realistic-looking fake data so the sandbox workflow can be
-exercised end-to-end without any real external APIs. The workflow exposes each one to
+Flight search is real when ``SERPAPI_API_KEY`` is set: real Google Flights schedules,
+flight numbers, and economy prices (see ``google_flights.py``). Everything else, and
+flight search without a key or after the API keeps failing, returns realistic-looking
+simulated data, so the sandbox workflow runs end-to-end without any external APIs. The workflow exposes each one to
 the sandboxed script as a *host function* (see ``workflow.py``); when the script calls
 that host function, the workflow runs the matching activity here durably. The script
 never touches Temporal — it just calls a plain function.
@@ -29,6 +31,7 @@ from temporalio.workflow import ActivityConfig
 
 from temporal_agent_harness.harness import agent
 
+from . import google_flights
 from .travel_models import (
     Fare,
     FareLevel,
@@ -69,6 +72,9 @@ DEFAULT_NEIGHBORHOODS = ["Downtown", "City Center", "Old Town", "Waterfront", "A
 # tool's decorator now (the in-workflow approval/dispatch logic, if any, runs outside it).
 _TRAVEL_ACTIVITY_TIMEOUT = timedelta(seconds=30)
 
+# Google returns a dozen or more itineraries; the agent reads every one, so keep it short.
+MAX_REAL_FLIGHTS = 6
+
 # Cabins by row, with the seat letters in each row. Economy exit rows cost extra.
 CABINS: dict[FareLevel, tuple[range, str]] = {
     "business": (range(1, 5), "ACDF"),
@@ -79,7 +85,18 @@ EXIT_ROWS = {12, 13}
 EXIT_ROW_EXTRA_USD = 40.0
 LAST_ROW = 30
 
-FLIGHT_ID = re.compile(r"^FL-[A-Z]{6}-\d{8}-\d{3}$")
+# How many attempts a Google Flights lookup gets before the Activity answers with simulated
+# flights instead. Each failed attempt raises, so Temporal's default Retry Policy retries it
+# (1 second, then 2 seconds later) and the attempts show in the Temporal UI and in Ziggy's
+# conversation. The last attempt falls back rather than failing, so the trip goes on.
+REAL_FLIGHT_ATTEMPTS = 3
+
+SIMULATED_FLIGHT_ID = re.compile(r"^FL-[A-Z]{6}-\d{8}-\d{3}$")
+# The real flight number of each leg: an IATA airline code, never two digits, and a number.
+REAL_FLIGHT_ID = re.compile(
+    r"^FL-([A-Z]{3})([A-Z]{3})-(\d{4})(\d{2})(\d{2})-"
+    r"((?:[A-Z][A-Z0-9]|\d[A-Z])\d{1,4}(?:-(?:[A-Z][A-Z0-9]|\d[A-Z])\d{1,4})*)$"
+)
 
 
 def _make_ref(prefix: str, *parts: str) -> str:
@@ -93,9 +110,23 @@ def _flight_id(origin: str, destination: str, date: str, number: int) -> str:
     return f"FL-{origin}{destination}-{date.replace('-', '')}-{number:03d}"
 
 
+def _real_flight_id(origin: str, destination: str, date: str, flight_numbers: list[str]) -> str:
+    """`FL-SFOJFK-20261218-UA1234-UA567`: the route, the date, and each leg's real flight."""
+    return f"FL-{origin}{destination}-{date.replace('-', '')}-{'-'.join(flight_numbers)}"
+
+
+def _fares(economy: float) -> list[Fare]:
+    """Premium and business are simulated as multiples of the economy fare, real or not."""
+    return [
+        Fare(level="economy", price_usd=economy, changeable=False),
+        Fare(level="premium", price_usd=round(economy * 1.6, 2), changeable=True),
+        Fare(level="business", price_usd=round(economy * 3.4, 2), changeable=True),
+    ]
+
+
 def _flight(flight_id: str) -> Flight:
-    """Everything about a flight follows from its ID, so search, the seat map, and booking
-    agree on it without storing anything."""
+    """Everything about a simulated flight follows from its ID, so search, the seat map, and
+    booking agree on it without storing anything."""
     rng = random.Random(flight_id)
     dep_hour = rng.randint(6, 21)
     arr_hour = (dep_hour + rng.randint(2, 7)) % 24
@@ -107,12 +138,67 @@ def _flight(flight_id: str) -> Flight:
         arrival_time=f"{arr_hour:02d}:{rng.choice(['00', '15', '30', '45'])}",
         price_usd=economy,
         stops=rng.choices([0, 1, 2], weights=[5, 3, 1])[0],
-        fares=[
-            Fare(level="economy", price_usd=economy, changeable=False),
-            Fare(level="premium", price_usd=round(economy * 1.6, 2), changeable=True),
-            Fare(level="business", price_usd=round(economy * 3.4, 2), changeable=True),
-        ],
+        fares=_fares(economy),
     )
+
+
+async def _real_flights(origin: str, destination: str, date: str) -> list[Flight] | None:
+    """Real flights from Google Flights, or None to use simulated ones: when no API key is
+    set, or when this is the last allowed attempt and the API failed again."""
+    if not google_flights.SERPAPI_API_KEY:
+        return None
+    try:
+        itineraries = await google_flights.search(origin, destination, date)
+    except google_flights.FlightApiError as err:
+        attempt = activity.info().attempt
+        if attempt < REAL_FLIGHT_ATTEMPTS:
+            activity.logger.warning(
+                "Google Flights attempt %d failed; Temporal will retry it: %s", attempt, err
+            )
+            raise ApplicationError(
+                f"Google Flights is unavailable (attempt {attempt}): {err}",
+                type="FlightApiUnavailable",
+            ) from err
+        activity.logger.warning(
+            "Google Flights failed %d times; using simulated flights: %s", attempt, err
+        )
+        return None
+
+    flights: dict[str, Flight] = {}
+    for itinerary in itineraries:
+        flight_id = _real_flight_id(origin, destination, date, itinerary.flight_numbers)
+        flights.setdefault(
+            flight_id,
+            Flight(
+                flight_id=flight_id,
+                airline=itinerary.airline,
+                departure_time=itinerary.departure_time,
+                arrival_time=itinerary.arrival_time,
+                price_usd=itinerary.price_usd,
+                stops=len(itinerary.flight_numbers) - 1,
+                fares=_fares(itinerary.price_usd),
+            ),
+        )
+    return list(flights.values())[:MAX_REAL_FLIGHTS]
+
+
+async def _bookable_flight(flight_id: str) -> Flight:
+    """The flight as search showed it. A real flight's price is looked up again with the
+    identical search, which SerpApi answers from its free one-hour cache."""
+    real = REAL_FLIGHT_ID.match(flight_id)
+    if real:
+        origin, destination, year, month, day, _ = real.groups()
+        flights = await _real_flights(origin, destination, f"{year}-{month}-{day}")
+        if flights is not None:
+            found = next((f for f in flights if f.flight_id == flight_id), None)
+            if found is None:
+                raise ApplicationError(
+                    f"{flight_id} is no longer offered; search again and pick another flight.",
+                    non_retryable=True,
+                )
+            return found
+    # Simulated, or the API is down: the price follows from the ID, like a simulated flight.
+    return _flight(flight_id)
 
 
 def _seat_features(row: int, letter: str, rows: range, letters: str) -> list[str]:
@@ -171,7 +257,7 @@ def _open_seat(flight_id: str, seat_code: str, fare: FareLevel) -> Seat:
 
 
 def _require_flight(flight_id: str) -> None:
-    if not FLIGHT_ID.match(flight_id):
+    if not (SIMULATED_FLIGHT_ID.match(flight_id) or REAL_FLIGHT_ID.match(flight_id)):
         raise ApplicationError(
             f"No flight {flight_id}; use a flight_id from search_flights.", non_retryable=True
         )
@@ -191,6 +277,12 @@ async def search_flights_activity(request: FlightSearchRequest) -> FlightSearchR
     activity.logger.info(
         "Searching flights %s -> %s on %s", request.origin, request.destination, request.date
     )
+
+    real = await _real_flights(
+        request.origin.upper(), request.destination.upper(), request.date
+    )
+    if real is not None:
+        return FlightSearchResponse(flights=real)
 
     # Simulate the latency of querying an external flight-search API.
     await asyncio.sleep(random.uniform(3.0, 5.0))
@@ -267,7 +359,8 @@ async def book_flight_activity(request: FlightBookingRequest) -> FlightBookingRe
         "Booking %s (%s) for %s", request.flight_id, request.fare, request.passenger_name
     )
     _require_flight(request.flight_id)
-    fare = next(f for f in _flight(request.flight_id).fares if f.level == request.fare)
+    flight = await _bookable_flight(request.flight_id)
+    fare = next(f for f in flight.fares if f.level == request.fare)
 
     # Simulate the latency of confirming the booking with the airline.
     await asyncio.sleep(random.uniform(4.0, 6.0))

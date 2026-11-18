@@ -13,7 +13,7 @@ from temporal_agent_harness.ai_sdks.google_genai_plugin import GoogleGenAIPlugin
 from temporal_agent_harness.plugin import AgentHarnessPlugin
 
 from . import config
-from .ziggy import activities
+from .ziggy import activities, google_flights
 from .ziggy.conversational_subagent_workflow import ZiggyChatSubagentWorkflow
 from .ziggy.conversational_workflow import ZiggyChatAgentWorkflow
 from .ziggy.workflow import ZiggyDynamicAgentWorkflow
@@ -58,5 +58,9 @@ async def run() -> None:
         workflows=[ZiggyChatAgentWorkflow, ZiggyChatSubagentWorkflow, ZiggyDynamicAgentWorkflow],
         deployment_config=deployment_config(),
     )
+    if google_flights.SERPAPI_API_KEY:
+        logging.info("Flight search uses Google Flights through SerpApi")
+    else:
+        logging.info("SERPAPI_API_KEY is not set; flight search is simulated")
     logging.info("Polling %s in namespace %s", config.TASK_QUEUE, client.namespace)
     await worker.run()

@@ -94,6 +94,7 @@ Changes from the upstream example:
 | `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, `TEMPORAL_API_KEY`, `TEMPORAL_TLS*` | both | `localhost:7233`, `default` | Temporal connection. `temporal.toml` files are ignored. |
 | `TEMPORAL_TASK_QUEUE` | both | `agent-harness` | Queue for every agent. The catalog sets it per workspace. |
 | `GEMINI_API_KEY` | worker | required | Model calls. |
+| `SERPAPI_API_KEY` | worker | unset | Real flight search: Google Flights schedules, flight numbers and economy prices through [SerpApi](https://serpapi.com/google-flights-api). Unset, search is simulated. Seats and bookings are always simulated. |
 | `PAYLOAD_BUCKET` | both | unset | S3 bucket for payloads over 1.5 MB. |
 | `PAYLOAD_DIR` | both | harness default | Local directory for those payloads when no bucket is set. Web and worker must share it. |
 | `TRUST_AUTH_HEADERS` | web | `false` | Read the user from `X-Temporal-Auth-Subject`. Set it only behind the catalog ingress. |

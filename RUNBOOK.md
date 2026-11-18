@@ -16,6 +16,7 @@ The demo makes three problems visible:
 
 - **On tmprl-demo.cloud,** open the Agent Harness catalog entry and press **Create crashable environment**, then **Open environment** once it shows **Running**. The app sits behind the catalog's sign-in. The environment gets its own Task Queue and worker, and the catalog supplies the Gemini key and the Temporal credentials.
 - **Locally,** install [uv](https://docs.astral.sh/uv/), Node 22 or later, and the [Temporal CLI](https://docs.temporal.io/cli). The conversational agent needs a Gemini API key. Without one, you can still play the scripted trip in [Start it](#start-it); set `GEMINI_API_KEY` to any value so the worker starts.
+- **Real flights are optional.** With `SERPAPI_API_KEY` set on the worker, flight search returns real Google Flights flights: real airlines, flight numbers (`FL-SFOJFK-20261218-UA1234`), times and economy prices. Seats and bookings stay simulated. The free SerpApi plan allows 250 searches a month, and repeating the same search within an hour is free. Without a key, search is simulated, as before. The worker logs which mode it's in at startup.
 - The demo never reads your Temporal CLI profile. It connects with `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE` and `TEMPORAL_API_KEY` only, and defaults to `localhost:7233` and `default`.
 
 ## Start it
@@ -377,6 +378,8 @@ When someone asks what they'd change for their own system, these are the parts t
 | **thinking** runs for minutes | Gemini is slow to send its first token | Wait; the chat says so after 30 seconds. Past the 3-minute start-to-close timeout the Activity is retried |
 | A booking stays **DELAYED** after the worker is back | The interrupted attempt hasn't hit its 30-second start-to-close timeout yet | Wait up to half a minute |
 | Ziggy asks to run a second script for the same step | The first script failed its type check or raised. The error goes back to the model as the tool's result, and Ziggy writes a corrected script | Approve the new script; this is normal |
+| Flight IDs end in `-001`, `-002` instead of real flight numbers, with a key set | Google Flights failed three attempts in a row (rejected key, monthly searches used up, outage, or no flights on the route), so search fell back to simulated flights. The worker logs `Google Flights failed 3 times; using simulated flights` with the reason | Check the reason in the worker log. The trip still works on simulated flights. An invalid or exhausted key doesn't need fixing mid-demo |
+| A search shows **failed**, then runs again | A Google Flights attempt failed and Temporal is retrying it, 1 and then 2 seconds later | Nothing; the third attempt falls back to simulated flights if the API is still failing |
 | The worker fails to import `google.genai._interactions` | `google-genai` 2.9.0 or later is installed | Run `uv sync`; `pyproject.toml` caps it below 2.9 |
 
 ## Keeping this runbook current

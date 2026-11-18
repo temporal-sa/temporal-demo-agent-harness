@@ -2331,6 +2331,7 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "google-genai" },
+    { name = "httpx" },
     { name = "temporal-agent-harness", extra = ["code-mode", "genai", "s3", "ui"] },
 ]
 
@@ -2345,6 +2346,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "google-genai", specifier = ">=2.8,<2.9" },
+    { name = "httpx", specifier = ">=0.28" },
     { name = "temporal-agent-harness", extras = ["genai", "code-mode", "ui", "s3"], specifier = "==0.6.0" },
 ]
 
