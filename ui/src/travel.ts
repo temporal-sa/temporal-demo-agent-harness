@@ -46,14 +46,22 @@ function airlineCode(detail: string): string {
   return known ? AIRLINE_CODES[known] : detail.replace(/[^A-Za-z]/g, "").slice(0, 2).toUpperCase();
 }
 
-/** `FL-SFOJFK-20261103-003` → origin, destination, date, and number, the shape Ziggy's
- *  simulated backend issues. IDs from before dates were added, `FL-SFOJFK-003`, have no date. */
-const FLIGHT_ID = /FL-([A-Z]{3})([A-Z]{3})-(?:(\d{4})(\d{2})(\d{2})-)?(\d+)/;
+/** `FL-SFOJFK-20261103-003` → origin, destination, date, and number, the shape of Ziggy's
+ *  simulated flights. A real flight from Google Flights ends in each leg's flight number,
+ *  `FL-SFOJFK-20261218-UA1234-UA567`, and reads as its first leg: airline `UA`, number `1234`.
+ *  IDs from before dates were added, `FL-SFOJFK-003`, have no date. */
+const FLIGHT_ID =
+  /FL-([A-Z]{3})([A-Z]{3})-(?:(\d{4})(\d{2})(\d{2})-)?(?:([A-Z][A-Z0-9]|\d[A-Z])(\d{1,4})(?:-(?:[A-Z][A-Z0-9]|\d[A-Z])\d{1,4})*|(\d+))/;
 
-function parseFlightId(id: string): { from: string; to: string; date: string; number: string } | null {
+function parseFlightId(
+  id: string,
+): { from: string; to: string; date: string; airline: string; number: string } | null {
   const m = FLIGHT_ID.exec(id);
   if (!m) return null;
-  return { from: m[1], to: m[2], date: m[3] ? `${m[3]}-${m[4]}-${m[5]}` : "", number: m[6] };
+  return {
+    from: m[1], to: m[2], date: m[3] ? `${m[3]}-${m[4]}-${m[5]}` : "",
+    airline: m[6] ?? "", number: m[7] ?? m[8],
+  };
 }
 
 /** A host call's arguments arrive as `{request: {...}}`. */
@@ -129,7 +137,8 @@ export function departures(agents: readonly AgentView[], board: TripBoard | unde
       if (!flight) continue;
       upsert({
         key: `flight:${req.flight_id}`, kind: "flight", stage: stageOf(part, "book"),
-        from: flight.from, to: flight.to, date: flight.date, label: `FL ${flight.number}`,
+        from: flight.from, to: flight.to, date: flight.date,
+        label: `${flight.airline || "FL"} ${flight.number}`,
         code: confirmationCode(part), price: null, fare: req.fare ?? "economy", seat: null,
       });
     } else if (part.toolName === "select_seat" && req.flight_id && part.state === "done") {
@@ -170,7 +179,7 @@ export function departures(agents: readonly AgentView[], board: TripBoard | unde
         key: made?.key ?? (id ? `flight:${id}` : `flight:${booked.confirmation_code}`),
         kind: "flight", stage: "confirmed", from: flight?.from ?? "", to: flight?.to ?? "",
         date: flight?.date ?? "",
-        label: number ? `${airlineCode(booked.detail)} ${number}` : booked.detail,
+        label: number ? `${flight?.airline || airlineCode(booked.detail)} ${number}` : booked.detail,
         code: booked.confirmation_code, price: booked.price_usd ?? null,
         fare: booked.fare ?? null, seat: booked.seat ?? null,
       });
