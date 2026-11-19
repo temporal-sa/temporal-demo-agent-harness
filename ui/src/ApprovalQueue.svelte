@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { ToolApprovalDecision, WaitingToolCall } from "@temporalio/agent-harness-client";
+  import type { ToolApprovalDecision, WaitingToolCall } from "@temporalio/agent-kit-client";
   import ApprovalCard from "./ApprovalCard.svelte";
   import { callSummary, toolLabel } from "./format.ts";
 

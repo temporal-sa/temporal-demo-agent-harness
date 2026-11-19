@@ -22,7 +22,7 @@ from temporalio.contrib.workflow_streams import WorkflowStreamClient
 from tests.temporal_env import start_workflow_environment
 from temporalio.worker import Worker
 
-from temporal_agent_harness.harness.agent_protocol import (
+from temporal_agent_kit.agent_protocol import (
     AGENT_ID_LENGTH,
     SEND_AGENT_MESSAGE_UPDATE,
     TURN_EVENTS_TOPIC,
@@ -33,9 +33,9 @@ from temporal_agent_harness.harness.agent_protocol import (
     AgentMessageReply,
     MessageDisposition,
 )
-from temporal_agent_harness.plugin import AgentHarnessPlugin
+from temporal_agent_kit.plugin import AgentKitPlugin
 
-from temporal_agent_harness.harness.agent_client import AgentClient
+from temporal_agent_kit.agent_client import AgentClient
 
 from agent_harness_demo.ziggy import activities
 from agent_harness_demo.ziggy.workflow import ZiggyDynamicAgentWorkflow
@@ -52,7 +52,7 @@ async def client_and_queue():
     )
     task_queue = f"subagent-e2e-{uuid.uuid4()}"
     # One worker hosts BOTH the parent and the child agent (the parent starts the child on this
-    # same queue). The harness plugin supplies everything else: the pydantic-monty batch + host
+    # same queue). The kit plugin supplies everything else: the pydantic-monty batch + host
     # activities the child needs, and the subagent-turn activity the parent's runner dispatches
     # — the latter bound to this worker's client so it can talk to the child workflow.
     async with Worker(
@@ -63,7 +63,7 @@ async def client_and_queue():
             ApprovalGatedSubagentParentWorkflow,
             ZiggyDynamicAgentWorkflow,
         ],
-        plugins=[AgentHarnessPlugin(tools=activities.ALL_TOOLS)],
+        plugins=[AgentKitPlugin(tools=activities.ALL_TOOLS)],
     ):
         try:
             yield env.client, task_queue
@@ -407,17 +407,22 @@ async def test_human_can_message_a_live_subagent_directly(client_and_queue):
     assert (await child_client.get_status()).current_turn == 3
 
 
-async def test_attach_after_stopped_subagent_degrades_gracefully(client_and_queue):
-    # The REAL graceful-degradation path (distinct from the LIVE merge above, which reads the
-    # child's detail in real time BEFORE the end-of-turn stop completes the child): here we drive
-    # the subagent and STOP it, so by the time we REATTACH it is a COMPLETED workflow. workflow_streams
-    # cannot read a completed workflow's stream, so the merge cannot mount the stopped child on
-    # replay — it must DEGRADE rather than wedge: release the child's close gate so the parent renders
-    # to its turn_end, and surface a non-fatal subagent_stream_unavailable marker for the child.
+async def test_attach_after_stopped_subagent_replays_its_turns_in_brackets(client_and_queue):
+    # Drive the subagent and STOP it, so by the time we REATTACH it is a COMPLETED workflow. A
+    # closed run's workflow stream stays readable, so the replay merge mounts the stopped child and
+    # nests its turns in the parent's brackets exactly as the live merge does, with no
+    # subagent_stream_unavailable marker. The marker for a child whose reads fail is covered in
+    # the kit's own tests/test_stream_merge.py.
     client, task_queue = client_and_queue
-    parent_id, _live = await _merged_send(
+    parent_id, live = await _merged_send(
         client, task_queue, [_const_script(42), _const_script(99)], stop=True
     )
+    # The parent's turn ends once it has asked the child to stop, not once the child's workflow has
+    # completed, so wait for the completion before reattaching.
+    (child_workflow_id,) = {
+        e.event.workflow_id for e in live if e.event.type == AgentEventType.SUBAGENT_STARTED
+    }
+    await client.get_workflow_handle(child_workflow_id).result()
 
     # Reattach from the start: the parent's backlog still references the now-completed subagent.
     agent_client = AgentClient(client, parent_id)
@@ -428,35 +433,9 @@ async def test_attach_after_stopped_subagent_degrades_gracefully(client_and_queu
         if isinstance(item, AgentEvent):
             attached.append(item)
 
-    # The subagent the parent drove (and stopped) — identified off the replayed subagent_started.
-    child_ids = {
-        e.event.subagent_id
-        for e in attached
-        if e.event.type == AgentEventType.SUBAGENT_STARTED
-    }
-    assert len(child_ids) == 1
-    child_id = next(iter(child_ids))
-
-    # The parent stream rendered FULLY despite the unreadable child — its turn_end is present (the
-    # dead child's never-coming turn_end did not strand the parent's tail behind the close gate).
-    parent_events = [e for e in attached if e.agent_id != child_id]
-    assert parent_events[-1].event.type == AgentEventType.TURN_END
-
-    # A non-fatal marker was surfaced for the stopped subagent (its own turn DETAIL is forgone), and
-    # no actual child turn detail leaked onto the merged stream.
-    markers = [
-        e
-        for e in attached
-        if e.event.type == AgentEventType.SUBAGENT_STREAM_UNAVAILABLE
-    ]
-    assert markers and all(m.event.subagent_id == child_id for m in markers)
-    child_detail = [
-        e
-        for e in attached
-        if e.agent_id == child_id
-        and e.event.type != AgentEventType.SUBAGENT_STREAM_UNAVAILABLE
-    ]
-    assert not child_detail
+    _assert_subagent_turns_nested_in_brackets(attached, expected_child_turns=2)
+    assert not [e for e in attached if e.event.type == AgentEventType.SUBAGENT_STREAM_UNAVAILABLE]
+    assert attached[-1].event.type == AgentEventType.TURN_END
 
 
 async def test_gated_concurrent_dispatches_get_distinct_turn_numbers(client_and_queue):

@@ -19,9 +19,9 @@ import json
 import os
 import secrets
 
-from temporal_agent_harness.harness.agent_client import AgentClient
-from temporal_agent_harness.harness.agent_protocol import AgentConfig, ToolApprovalPolicy
-from temporal_agent_harness.plugin import AgentHarnessPlugin
+from temporal_agent_kit.agent_client import AgentClient
+from temporal_agent_kit.agent_protocol import AgentConfig, ToolApprovalPolicy
+from temporal_agent_kit.plugin import AgentKitPlugin
 
 from agent_harness_demo import config
 from agent_harness_demo.ziggy.choices import CHOICE_TOOL_NAMES
@@ -139,7 +139,7 @@ asyncio.run(main())
 
 async def main(approvals: bool) -> None:
     storage = await config.payload_storage()
-    client = await config.connect([AgentHarnessPlugin(large_payload_offload=storage)])
+    client = await config.connect([AgentKitPlugin(large_payload_offload=storage)])
     policy = (
         ToolApprovalPolicy.allow_tools([*BOARD_TOOL_NAMES, *CHOICE_TOOL_NAMES])
         if approvals
@@ -148,7 +148,7 @@ async def main(approvals: bool) -> None:
     session_id = prefix_for(DEV_USER) + "preview-" + secrets.token_hex(3)
     await client.start_workflow(
         "ZiggyDynamicAgent",
-        AgentConfig(approval_policy=policy),
+        AgentConfig(approval_policy=policy, close_after_idle=config.SESSION_IDLE_CLOSE),
         id=session_id,
         task_queue=config.TASK_QUEUE,
         execution_timeout=config.SESSION_TIMEOUT,

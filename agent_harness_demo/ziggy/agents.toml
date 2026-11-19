@@ -1,14 +1,17 @@
 # Agents the UI can launch. The web server reads this file at startup and replaces each
 # task_queue with the configured TEMPORAL_TASK_QUEUE, so a crashable workspace starts
 # agents on its own queue. To expose a new agent, register its workflow on the worker
-# and add an [[agents]] entry here.
+# and add an [[agents]] entry here. Each `schema` is the agent's schema document, which
+# tells the API what init data the agent takes. Regenerate it after changing the agent's
+# init data, handlers or state (README, "Regenerating the agent schemas"); a test fails
+# while it is stale.
 
 [[agents]]
 key = "ziggy-chat"
 workflow_type = "ZiggyChatAgent"
-agent = "agent_harness_demo.ziggy.conversational_workflow:ZiggyChatAgentWorkflow"
 task_queue = "agent-harness"
 label = "Ziggy (Conversational)"
+schema = "ZiggyChatAgent.schema.json"
 description = """
 A conversational travel-booking assistant. Chat in plain text; an LLM converses to
 gather your trip details, then WRITES its own pydantic-monty Python script and runs
@@ -18,9 +21,9 @@ replying with the results."""
 [[agents]]
 key = "ziggy-chat-subagent"
 workflow_type = "ZiggyChatSubagentAgent"
-agent = "agent_harness_demo.ziggy.conversational_subagent_workflow:ZiggyChatSubagentWorkflow"
 task_queue = "agent-harness"
 label = "Ziggy (Conversational, Subagent)"
+schema = "ZiggyChatSubagentAgent.schema.json"
 description = """
 Same conversational travel-booking experience as Ziggy (Conversational), but instead
 of running its Python scripts inline it drives the barebones Ziggy (Dynamic) agent as

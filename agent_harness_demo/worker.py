@@ -9,8 +9,8 @@ from google.genai import Client as GeminiClient
 from temporalio.common import VersioningBehavior, WorkerDeploymentVersion
 from temporalio.worker import Worker, WorkerDeploymentConfig
 
-from temporal_agent_harness.ai_sdks.google_genai_plugin import GoogleGenAIPlugin
-from temporal_agent_harness.plugin import AgentHarnessPlugin
+from temporal_agent_kit.ai_sdks.google_genai_plugin import GoogleGenAIPlugin
+from temporal_agent_kit.plugin import AgentKitPlugin
 
 from . import config
 from .ziggy import activities, google_flights
@@ -44,12 +44,12 @@ async def run() -> None:
     if not api_key:
         raise SystemExit("GEMINI_API_KEY is not set; the conversational agents need it.")
     storage = await config.payload_storage()
-    # The harness plugin goes last so its payload converter, shared with the web process,
+    # The kit plugin goes last so its payload converter, shared with the web process,
     # wraps the Gemini plugin's. It also registers the travel tools as activities.
     client = await config.connect(
         [
             GoogleGenAIPlugin(GeminiClient(api_key=api_key)),
-            AgentHarnessPlugin(tools=activities.ALL_TOOLS, large_payload_offload=storage),
+            AgentKitPlugin(tools=activities.ALL_TOOLS, large_payload_offload=storage),
         ]
     )
     worker = Worker(

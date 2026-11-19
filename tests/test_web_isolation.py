@@ -6,12 +6,14 @@ session is just a started workflow that Visibility can list.
 
 import asyncio
 import uuid
+from datetime import timedelta
 
 import httpx
 import pytest
 import pytest_asyncio
 
-from temporal_agent_harness.plugin import AgentHarnessPlugin
+from temporal_agent_kit.agent_protocol import AgentConfig
+from temporal_agent_kit.plugin import AgentKitPlugin
 
 from agent_harness_demo import config, web
 from tests.temporal_env import start_workflow_environment
@@ -21,7 +23,7 @@ CHAT_AGENT = "ZiggyChatAgent"
 
 @pytest_asyncio.fixture(scope="module")
 async def temporal():
-    env = await start_workflow_environment(plugins=[AgentHarnessPlugin()])
+    env = await start_workflow_environment(plugins=[AgentKitPlugin()])
     yield env.client
     await env.shutdown()
 
@@ -154,3 +156,39 @@ async def test_a_session_starts_with_the_travelers_date_or_is_refused(api):
         bad = {"today": "December 1st"}
         refused = await alice.post("/api/sessions", json={"agent_workflow_type": CHAT_AGENT, "data": bad})
         assert refused.status_code == 422
+
+
+async def test_a_session_closes_itself_after_sitting_idle(api, temporal, monkeypatch):
+    monkeypatch.setattr(config, "SESSION_IDLE_CLOSE", timedelta(minutes=7))
+    as_user = api(f"agent-harness-{uuid.uuid4().hex[:8]}")
+    async with as_user("alice") as alice:
+        created = await alice.post("/api/sessions", json={"agent_workflow_type": CHAT_AGENT})
+        created.raise_for_status()
+        history = await temporal.get_workflow_handle(created.json()["workflow_id"]).fetch_history()
+    started = history.events[0].workflow_execution_started_event_attributes
+    agent_config = (
+        await temporal.data_converter.decode(started.input.payloads[:1], [AgentConfig])
+    )[0]
+    assert agent_config.close_after_idle == timedelta(minutes=7)
+    assert started.workflow_execution_timeout.ToTimedelta() == config.SESSION_TIMEOUT
+
+
+async def test_a_closed_session_stays_listed_for_the_console_and_refuses_messages(api, temporal):
+    as_user = api(f"agent-harness-{uuid.uuid4().hex[:8]}")
+    async with as_user("alice") as alice:
+        created = await alice.post("/api/sessions", json={"agent_workflow_type": CHAT_AGENT})
+        session_id = created.json()["workflow_id"]
+        await temporal.get_workflow_handle(session_id).terminate("closed for the test")
+
+        for _ in range(50):
+            listed = {s["workflow_id"]: s for s in (await alice.get("/api/sessions")).json()}
+            if listed.get(session_id, {}).get("closed"):
+                break
+            await asyncio.sleep(0.1)
+        assert listed[session_id]["closed"] is True
+        view = (await alice.get("/api/view")).json()
+        assert session_id not in {s["workflow_id"] for s in view["sessions"]}
+
+        sent = await alice.post("/api/messages", json={"session_id": session_id, "message": "hi"})
+        assert sent.status_code == 409
+        assert sent.json()["error"] == "session_closed"

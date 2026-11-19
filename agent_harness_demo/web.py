@@ -2,15 +2,15 @@
 
 Two views share one API and the same sessions:
 
-* `/` is the demo view (`ui/`), built on the harness's npm client in the Temporal demo theme.
-* `/console/` is the harness's own packaged UI, unchanged apart from a link back to `/`.
+* `/` is the demo view (`ui/`), built on the kit's npm client in the Temporal demo theme.
+* `/console/` is the kit's own packaged UI, unchanged apart from a link back to `/`.
 
-The API routes match the harness's own web app (`temporal_agent_harness.web.app`), with two
+The API routes match the kit's own web app (`temporal_agent_kit.web.app`), with two
 changes for a shared catalog deployment:
 
 * Sessions are agent workflows started directly, with IDs of the form
   `<task queue>.<owner>.<session>`, and listed with a Visibility query on that prefix. The
-  harness's singleton session-manager workflow is not used, so one person's list never
+  kit's singleton session-manager workflow is not used, so one person's list never
   includes another's and nothing runs forever on the side.
 * Every route that names a session checks that the caller owns it (or owns its parent, for
   a subagent) before it reads, streams, or changes anything.
@@ -32,12 +32,12 @@ from typing import Annotated, AsyncIterator
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import TypeAdapter
+from pydantic import TypeAdapter, ValidationError
 from temporalio.client import Client
 from temporalio.exceptions import WorkflowAlreadyStartedError
 from temporalio.service import RPCError, RPCStatusCode
 
-from temporal_agent_harness.harness.agent_client import (
+from temporal_agent_kit.agent_client import (
     AgentClient,
     AgentStreamOutput,
     AgentTurnError,
@@ -47,22 +47,23 @@ from temporal_agent_harness.harness.agent_client import (
     MidTurnRejectedError,
     ToolApprovalError,
 )
-from temporal_agent_harness.harness.agent_protocol import AgentConfig, AgentStatus
-from temporal_agent_harness.plugin import AgentHarnessPlugin
-from temporal_agent_harness.ui import packaged_ui_dist
-from temporal_agent_harness.web.agent_starts import (
+from temporal_agent_kit.agent_protocol import AgentConfig, AgentStatus
+from temporal_agent_kit.agent_workflow import agent_init_data
+from temporal_agent_kit.plugin import AgentKitPlugin
+from temporal_agent_kit.ui import packaged_ui_dist
+from temporal_agent_kit.web.agent_starts import (
     InvalidStartData,
-    resolve_agent_starts,
+    agent_starts as registry_agent_starts,
     validated_start_data,
 )
-from temporal_agent_harness.web.registry import load_agent_registry
-from temporal_agent_harness.web.session_manager import AgentRegistry, Session
-from temporal_agent_harness.web.task_queue_status import describe_task_queue_workers
+from temporal_agent_kit.web.registry import load_agent_registry
+from temporal_agent_kit.web.session_manager import AgentRegistry, Session
+from temporal_agent_kit.web.task_queue_status import describe_task_queue_workers
 
-# Request bodies, SSE framing, and session previews are reused from the harness's own app so
+# Request bodies, SSE framing, and session previews are reused from the kit's own app so
 # the packaged UI sees identical responses. They are private names, which is safe only
-# because pyproject.toml pins the harness to an exact version.
-from temporal_agent_harness.web.app import (
+# because pyproject.toml pins the kit to an exact version.
+from temporal_agent_kit.web.app import (
     STREAM_ERROR_SSE_EVENT,
     CallbackResultRequestBody,
     ChatRequestBody,
@@ -77,6 +78,8 @@ from temporal_agent_harness.web.app import (
 )
 
 from . import config
+from .ziggy.conversational_subagent_workflow import ZiggyChatSubagentWorkflow
+from .ziggy.conversational_workflow import ZiggyChatAgentWorkflow
 
 # Behind the catalog ingress, the SSO gate sets this header and clients cannot. Anywhere
 # else it is just a header anyone can send, so it is ignored unless the deployment says so.
@@ -96,6 +99,14 @@ KEEPALIVE_SECONDS = 15
 KEEPALIVE = b": keepalive\n\n"
 
 DEMO_UI_DIST = Path(__file__).parent / "ui_dist"
+
+# The init data each launchable agent takes, by workflow type. The kit's server only checks
+# that init data is there when an agent requires it and leaves the contents to the agent, so
+# bad data would start a session the agent then refuses. This API refuses it up front instead.
+INIT_DATA = {
+    "ZiggyChatAgent": agent_init_data(ZiggyChatAgentWorkflow),
+    "ZiggyChatSubagentAgent": agent_init_data(ZiggyChatSubagentWorkflow),
+}
 # Added to the console's page so each view can open the same session in the other.
 CONSOLE_BACK_LINK = """<a id="demo-view-link" href="../" style="position:fixed;right:150px;top:12px;z-index:9999;
 padding:6px 10px;font:500 12px/1 'Noto Sans Mono',ui-monospace,monospace;color:#f8fafc;
@@ -168,6 +179,22 @@ async def with_keepalive(
             await items.aclose()
 
 
+def validated_init_data(workflow_type: str, data: dict | None) -> dict | None:
+    """`data` validated against the agent's init data model and normalized to JSON."""
+    spec = INIT_DATA.get(workflow_type)
+    if spec is None or data is None:
+        return data
+    try:
+        return spec.model.model_validate(data).model_dump(mode="json")
+    except ValidationError as err:
+        problems = "; ".join(
+            f"{'.'.join(map(str, error['loc']))}: {error['msg']}" for error in err.errors()
+        )
+        raise InvalidStartData(
+            f"Invalid init data for {workflow_type} ({spec.model.__name__}): {problems}"
+        ) from None
+
+
 def load_registry() -> AgentRegistry:
     registry = load_agent_registry(config.REGISTRY_PATH)
     for descriptor in registry.agents:
@@ -177,14 +204,14 @@ def load_registry() -> AgentRegistry:
 
 def create_app() -> FastAPI:
     registry = load_registry()
-    agent_starts = resolve_agent_starts(registry)
+    agent_starts = registry_agent_starts(registry)
     agent_types = [descriptor.workflow_type for descriptor in registry.agents]
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         storage = await config.payload_storage()
         app.state.temporal = await config.connect(
-            [AgentHarnessPlugin(large_payload_offload=storage)]
+            [AgentKitPlugin(large_payload_offload=storage)]
         )
         yield
 
@@ -193,6 +220,11 @@ def create_app() -> FastAPI:
 
     def temporal() -> Client:
         return app.state.temporal
+
+    def temporal_workflows_url() -> str:
+        # Each session carries it for the console's "Open in Temporal" link, which otherwise
+        # assumes a local dev server.
+        return f"{config.temporal_ui_url(temporal().namespace)}/workflows"
 
     async def owned_agent(prefix: str, session_id: str) -> AgentClient:
         await require_owned(temporal(), prefix, session_id)
@@ -211,7 +243,7 @@ def create_app() -> FastAPI:
             {
                 **asdict(descriptor),
                 "init_data": (
-                    agent_starts[descriptor.workflow_type].init_data_schema
+                    agent_starts[descriptor.workflow_type].init_data
                     if descriptor.workflow_type in agent_starts
                     else None
                 ),
@@ -221,11 +253,13 @@ def create_app() -> FastAPI:
         ]
         return JSONResponse({"agents": agents}, headers=NO_STORE)
 
-    async def running_sessions(prefix: str) -> list[dict]:
+    async def owned_sessions(prefix: str, *, running: bool) -> list[dict]:
+        """The caller's running sessions, or their closed ones (up to SESSION_LIST_LIMIT)."""
         types = " OR ".join(f"WorkflowType='{t}'" for t in agent_types)
+        status = "ExecutionStatus='Running'" if running else "ExecutionStatus!='Running'"
         query = (
             f"TaskQueue='{config.TASK_QUEUE}' AND WorkflowId STARTS_WITH '{prefix}' "
-            f"AND ExecutionStatus='Running' AND ({types})"
+            f"AND {status} AND ({types})"
         )
         sessions = [
             Session(
@@ -238,7 +272,12 @@ def create_app() -> FastAPI:
         ]
         return list(
             await asyncio.gather(
-                *(_session_with_execution_state(temporal(), session) for session in sessions)
+                *(
+                    _session_with_execution_state(
+                        temporal(), session, temporal_workflows_url()
+                    )
+                    for session in sessions
+                )
             )
         )
 
@@ -249,14 +288,19 @@ def create_app() -> FastAPI:
             {
                 "session_prefix": prefix,
                 "temporal_ui_url": config.temporal_ui_url(temporal().namespace),
-                "sessions": await running_sessions(prefix),
+                "sessions": await owned_sessions(prefix, running=True),
             },
             headers=NO_STORE,
         )
 
     @api.get("/sessions")
     async def list_sessions(prefix: Owner):
-        return await running_sessions(prefix)
+        # Closed ones too: the console opens only sessions it finds here, so without them a link
+        # to a trip that closed (after sitting idle, say) would read as a missing session.
+        running, closed = await asyncio.gather(
+            owned_sessions(prefix, running=True), owned_sessions(prefix, running=False)
+        )
+        return running + closed
 
     @api.post("/sessions")
     async def create_session(req: CreateSessionRequestBody, prefix: Owner):
@@ -266,6 +310,7 @@ def create_app() -> FastAPI:
         data = validated_start_data(
             req.agent_workflow_type, agent_starts.get(req.agent_workflow_type), req.data
         )
+        data = validated_init_data(req.agent_workflow_type, data)
         # The demo view names its session (prefix included) so it can open it before this
         # returns. Any other caller-chosen ID is placed inside the caller's own prefix.
         suffix = req.session_id or secrets.token_hex(6)
@@ -273,10 +318,11 @@ def create_app() -> FastAPI:
             suffix = suffix[len(prefix) :]
         if not SESSION_SUFFIX.fullmatch(suffix):
             raise HTTPException(status_code=422, detail="Invalid session ID")
+        agent_config = AgentConfig(close_after_idle=config.SESSION_IDLE_CLOSE)
         try:
             handle = await temporal().start_workflow(
                 req.agent_workflow_type,
-                args=[AgentConfig()] if data is None else [AgentConfig(), data],
+                args=[agent_config] if data is None else [agent_config, data],
                 id=prefix + suffix,
                 task_queue=config.TASK_QUEUE,
                 execution_timeout=config.SESSION_TIMEOUT,
@@ -289,7 +335,9 @@ def create_app() -> FastAPI:
             label=descriptor.label,
             agent_workflow_type=req.agent_workflow_type,
         )
-        return await _session_with_execution_state(temporal(), session)
+        return await _session_with_execution_state(
+            temporal(), session, temporal_workflows_url()
+        )
 
     @api.get("/workflow-status/{workflow_id}")
     async def workflow_status(workflow_id: str, prefix: Owner):
@@ -412,7 +460,23 @@ def _message_parts(req: ChatRequestBody) -> tuple[str, dict]:
 
 
 def _add_error_handlers(app: FastAPI) -> None:
-    """The same status codes and bodies the harness's app returns, which the UI relies on."""
+    """The same status codes and bodies the kit's app returns, which the UI relies on, plus
+    one for a session that has closed."""
+
+    @app.exception_handler(RPCError)
+    async def session_closed(_, exc: RPCError):
+        # Temporal answers NOT_FOUND to an Update or Signal for a workflow that has completed,
+        # which a session does once it closes itself after sitting idle. The kit's app lets that
+        # through as a bare 500; say what happened instead. Anything else stays a 500.
+        if exc.status != RPCStatusCode.NOT_FOUND:
+            return JSONResponse(status_code=500, content={"error": "temporal", "message": str(exc)})
+        return JSONResponse(
+            status_code=409,
+            content={
+                "error": "session_closed",
+                "message": f"This session has closed and takes no more messages ({exc.message}).",
+            },
+        )
 
     @app.exception_handler(JoinedTurnError)
     async def joined_turn(_, exc: JoinedTurnError):
@@ -425,7 +489,7 @@ def _add_error_handlers(app: FastAPI) -> None:
     async def invalid_start_data(_, exc: InvalidStartData):
         return JSONResponse(
             status_code=422,
-            content={"error": "invalid_init_data", "message": str(exc), "errors": exc.errors},
+            content={"error": "invalid_init_data", "message": str(exc)},
         )
 
     @app.exception_handler(MidTurnRejectedError)

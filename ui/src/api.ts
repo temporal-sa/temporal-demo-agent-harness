@@ -1,4 +1,4 @@
-import { HttpTransport, startSession, type SessionSummary } from "@temporalio/agent-harness-client";
+import { HttpTransport, startSession, type SessionSummary } from "@temporalio/agent-kit-client";
 import { ZiggyChatAgent, type TravelerContext } from "./generated/ZiggyChatAgent.ts";
 
 /** One transport for the page, against the same `api/` the console uses. */

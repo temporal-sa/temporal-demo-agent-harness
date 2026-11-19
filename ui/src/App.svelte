@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { createHarnessContext } from "@temporalio/agent-harness-svelte";
+  import { createKitContext } from "@temporalio/agent-kit-svelte";
   import { createTrip, loadView, newSessionId, type PageView } from "./api.ts";
   import logo from "./assets/temporal-logo.svg";
   import { motion, toggleMotion } from "./motion.svelte.ts";
   import Backdrop from "./Backdrop.svelte";
   import Trip from "./Trip.svelte";
 
-  createHarnessContext();
+  createKitContext();
 
   let view = $state<PageView | null>(null);
   let loadError = $state<string | null>(null);
@@ -68,7 +68,7 @@
     <div class="brand">
       <img src={logo} alt="Temporal" width="132" height="34" />
       <div>
-        <p class="eyebrow">Agent Harness · Code Mode · Human in the loop</p>
+        <p class="eyebrow">Agent Kit · Code Mode · Human in the loop</p>
         <h1 class="title">Ziggy, a <span class="text-gradient-ultraviolet">durable</span> travel agent</h1>
       </div>
     </div>
@@ -76,7 +76,7 @@
       {#if workflowLink}
         <a class="button small secondary ultraviolet" href={workflowLink} target="_blank" rel="noreferrer">Temporal UI ↗</a>
       {/if}
-      <a class="button small secondary ultraviolet" href={consoleLink}>Harness console</a>
+      <a class="button small secondary ultraviolet" href={consoleLink}>Agent Kit console</a>
       {#if !motion.reduced}
         <button class="button small secondary ultraviolet" aria-pressed={motion.paused} onclick={toggleMotion}>
           {motion.paused ? "Play motion" : "Pause motion"}
@@ -94,7 +94,7 @@
 
   {#if sessionId}
     {#key sessionId}
-      <Trip {sessionId} />
+      <Trip {sessionId} {newTrip} />
     {/key}
   {:else if !loadError}
     <div class="card starting" role="status">

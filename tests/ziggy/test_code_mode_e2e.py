@@ -1,4 +1,4 @@
-# ABOUTME: End-to-end test of the Code Mode harness feature with NO model in the loop. A
+# ABOUTME: End-to-end test of the Code Mode kit feature with NO model in the loop. A
 # model-free parent (CodeModeE2EParentWorkflow) builds a code_mode_tool over two deterministic
 # activity tools and runs scripts through it, so the full stack — stub generation, the sandbox
 # batch loop, host-call dispatch via run_tool (coercion + result marshalling + tool lifecycle),
@@ -29,7 +29,7 @@ from temporalio.worker import (
     WorkflowOutboundInterceptor,
 )
 
-from temporal_agent_harness.harness.agent_protocol import (
+from temporal_agent_kit.agent_protocol import (
     SEND_AGENT_MESSAGE_UPDATE,
     TURN_EVENTS_TOPIC,
     AgentConfig,
@@ -38,7 +38,7 @@ from temporal_agent_harness.harness.agent_protocol import (
     AgentMessage,
     AgentMessageReply,
 )
-from temporal_agent_harness.plugin import AgentHarnessPlugin
+from temporal_agent_kit.plugin import AgentKitPlugin
 
 from ._code_mode_e2e_parent import CODE_MODE_TOOLS, CodeModeE2EParentWorkflow
 
@@ -80,7 +80,7 @@ async def client_and_queue():
         workflows=[CodeModeE2EParentWorkflow],
         # The plugin supplies the durable bodies of the host tools; Code Mode needs no
         # activities of its own.
-        plugins=[AgentHarnessPlugin(tools=CODE_MODE_TOOLS)],
+        plugins=[AgentKitPlugin(tools=CODE_MODE_TOOLS)],
         interceptors=[_RecordScheduledActivities()],
     ):
         try:
@@ -193,7 +193,7 @@ async def test_gathered_calls_run_as_one_concurrent_batch(client_and_queue):
 async def test_injected_params_are_supplied_by_the_harness(client_and_queue):
     client, task_queue = client_and_queue
     # `echo`'s host signature is echo(label) — the Injected `secret` is hidden from the script and
-    # supplied by the harness from the code_mode_tool `injections`.
+    # supplied by the kit from the code_mode_tool `injections`.
     script = (
         "import asyncio\n"
         "async def main():\n"

@@ -1,4 +1,12 @@
-import type { ToolState } from "@temporalio/agent-harness-client";
+import type { ToolPart, ToolState } from "@temporalio/agent-kit-client";
+
+/** A string field of a finished tool call's result, which the event stream carries as JSON. */
+export function outputField(part: ToolPart, name: string): string | null {
+  const output = part.output;
+  if (!output || typeof output !== "object" || Array.isArray(output)) return null;
+  const value = output[name];
+  return typeof value === "string" ? value : null;
+}
 
 /** `book_flight` → `Book flight`. */
 export function toolLabel(name: string): string {

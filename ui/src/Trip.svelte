@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { AgentSession } from "@temporalio/agent-harness-svelte";
+  import { AgentSession } from "@temporalio/agent-kit-svelte";
+  import { transport } from "./api.ts";
   import type { ZiggyChatAgent, TripBoard as Board } from "./generated/ZiggyChatAgent.ts";
   import ApprovalQueue from "./ApprovalQueue.svelte";
   import ChoiceCards from "./ChoiceCards.svelte";
@@ -12,7 +13,7 @@
   import RouteMap from "./RouteMap.svelte";
   import { departures } from "./travel.ts";
 
-  let { sessionId }: { sessionId: string } = $props();
+  let { sessionId, newTrip }: { sessionId: string; newTrip: () => void } = $props();
 
   const agent = new AgentSession<ZiggyChatAgent>({
     get sessionId() {
@@ -107,6 +108,54 @@
     return () => clearTimeout(timer);
   });
 
+  // A trip ends when its agent closes itself after sitting idle (SESSION_IDLE_CLOSE_MINUTES), or
+  // at its execution timeout. The client sees that when it reattaches, but while the agent is
+  // idle it only asks whether new work arrived, so the page also checks the workflow itself
+  // now and then and whenever the tab comes back. `ending` is what that check found.
+  let ending = $state<{ status: string; reason: string | null } | null>(null);
+  const ended = $derived(agent.connection === "closed" || ending !== null);
+  const endReason = $derived.by(() => {
+    const root = agent.rootAgentId ? agent.agents[agent.rootAgentId] : undefined;
+    const reason = root?.closeReason ?? ending?.reason ?? null;
+    if (reason === "idle_timeout_expired") return "idle";
+    if (reason === "requested") return "requested";
+    return ending?.status === "TIMED_OUT" ? "timeout" : "other";
+  });
+  async function noticeEnd(): Promise<boolean> {
+    const state = await transport.workflowStatus(sessionId);
+    if (!state.closed) return false;
+    // A closed agent still answers its status query, whose `close_reason` says why it closed.
+    // The client's snapshot type leaves that field out, though the response carries it.
+    const reason = await transport.agentStatus(sessionId).then(
+      (status) => (status as { close_reason?: string | null }).close_reason ?? null,
+      () => null,
+    );
+    ending = { status: state.execution_status, reason };
+    return true;
+  }
+  $effect(() => {
+    if (agent.connection !== "idle") return;
+    const check = () => {
+      if (!document.hidden) noticeEnd().catch(() => {}); // a failed check is not news
+    };
+    const timer = setInterval(check, 30_000);
+    document.addEventListener("visibilitychange", check);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", check);
+    };
+  });
+  // A send that fails may be the first sign the trip has ended.
+  $effect(() => {
+    if (!agent.error || ended) return;
+    noticeEnd().then(
+      (closed) => {
+        if (closed) agent.clearError();
+      },
+      () => {},
+    );
+  });
+
   const rows = $derived(departures(Object.values(agent.agents), board));
   // Choices waiting on the traveler, from Ziggy or any subagent, take over the chat column
   // until they're answered; the chat comes back, scrolled to the newest, once they are.
@@ -132,7 +181,24 @@
   </div>
 
   <div class="side">
-    {#if away}
+    {#if ended}
+      <div class="card ended" role="status">
+        <span class="badge idle">trip closed</span>
+        <p>
+          {#if endReason === "idle"}
+            Ziggy closed this trip after it sat idle without a message.
+          {:else if endReason === "timeout"}
+            This trip reached its time limit and closed.
+          {:else if endReason === "requested"}
+            This trip was ended.
+          {:else}
+            This trip has closed.
+          {/if}
+          Its conversation and bookings stay here and in the Temporal UI. To keep planning, start a new trip.
+        </p>
+        <button class="button small primary ultraviolet" onclick={newTrip}>Start a new trip</button>
+      </div>
+    {:else if away}
       <div class="card recovering" role="status">
         <span class="badge progress">reconnecting</span>
         <p>
@@ -142,7 +208,7 @@
         </p>
       </div>
     {/if}
-    {#if agent.error}
+    {#if agent.error && !ended}
       <div class="card failure" role="alert">
         <span class="badge error">error</span>
         <p>{agent.error.message}</p>
@@ -150,7 +216,7 @@
       </div>
     {/if}
 
-    {#if choices.length > 0}
+    {#if choices.length > 0 && !ended}
       <section class="card choosing" aria-label="Choose an option">
         {#each choices as call (call.part.toolId)}
           <ChoiceCards part={call.part} answer={(choice) => agent.provideToolOutput(call.part.toolId, choice)} />
@@ -160,7 +226,7 @@
       <Conversation {messages} />
     {/if}
 
-    {#if agent.pendingApprovals.length > 0}
+    {#if agent.pendingApprovals.length > 0 && !ended}
       <div class="approvals">
         <ApprovalQueue
           calls={agent.pendingApprovals}
@@ -169,7 +235,7 @@
       </div>
     {/if}
 
-    {#if choices.length === 0}
+    {#if choices.length === 0 && !ended}
       <Settings
         {model}
         {policy}
@@ -210,6 +276,8 @@
   .approvals { max-height: 55%; overflow: auto; flex-shrink: 1; min-height: 0; }
   .choosing { overflow: auto; display: grid; gap: 1.5rem; align-content: start; border-color: var(--yellow); }
   .recovering { border-color: var(--yellow); display: grid; gap: .5rem; }
+  .ended { display: grid; gap: .5rem; justify-items: start; }
+  .ended p { margin: 0; }
   .failure { border-color: var(--red); display: grid; gap: .5rem; justify-items: start; }
   .recovering p, .failure p { margin: 0; }
   .composer { display: flex; gap: .6rem; align-items: stretch; }
