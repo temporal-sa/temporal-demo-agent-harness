@@ -95,7 +95,7 @@ Below the chat, **Approvals** switches the approval policy: **Ask for everything
 
 ## Show it in code
 
-All links point at commit [`eda32ba`](https://github.com/temporal-sa/temporal-demo-agent-harness/commit/eda32ba59215508d8c97507683e1551d87d92363). Open a file locally with `code -g <path>:<line>`.
+All links point at commit [`1e1f305`](https://github.com/temporal-sa/temporal-demo-agent-harness/commit/1e1f3058fbcdfc752820c7090219858c5b11b12f). Open a file locally with `code -g <path>:<line>`.
 
 The agent is built on [Temporal Agent Kit](https://github.com/temporal-community/temporal-agent-kit) 0.12.1, pinned in `pyproject.toml`. The kit provides the turn loop, the approval gate, Code Mode, and the event stream; this repo supplies the tools, the prompt, and the policy.
 
@@ -103,7 +103,7 @@ The agent is built on [Temporal Agent Kit](https://github.com/temporal-community
 
 **When to use it:** after beat 2, or when someone asks how the agent is stopped from booking on its own.
 
-**Where it is:** [`agent_harness_demo/ziggy/conversational_workflow.py` lines 181–199](https://github.com/temporal-sa/temporal-demo-agent-harness/blob/eda32ba59215508d8c97507683e1551d87d92363/agent_harness_demo/ziggy/conversational_workflow.py#L181-L199) (`code -g agent_harness_demo/ziggy/conversational_workflow.py:181`)
+**Where it is:** [`agent_harness_demo/ziggy/conversational_workflow.py` lines 181–199](https://github.com/temporal-sa/temporal-demo-agent-harness/blob/1e1f3058fbcdfc752820c7090219858c5b11b12f/agent_harness_demo/ziggy/conversational_workflow.py#L181-L199) (`code -g agent_harness_demo/ziggy/conversational_workflow.py:181`)
 
 ```python
 @agent.init
@@ -128,7 +128,7 @@ def __init__(self, config: AgentConfig, data: TravelerContext | None = None) -> 
 - The wait is a Workflow `wait_condition` inside the kit. An approval arrives as a `tool_approval` Update, so the decision and who made it are in the Workflow history. No Activity or timer runs while Ziggy waits.
 - The kit keeps `tool_approval` separate from the message Update on purpose: a parent agent that drives this one can send it messages but can't approve its tool calls.
 - **Always allow** sends the approval with `remember`, which adds that tool to the session's allow-list and releases the other waiting calls of it.
-- The policy is live state. `set_approval_policy` (the **Approvals** menu) swaps it mid-turn; see [lines 246–259](https://github.com/temporal-sa/temporal-demo-agent-harness/blob/eda32ba59215508d8c97507683e1551d87d92363/agent_harness_demo/ziggy/conversational_workflow.py#L246-L259).
+- The policy is live state. `set_approval_policy` (the **Approvals** menu) swaps it mid-turn; see [lines 246–259](https://github.com/temporal-sa/temporal-demo-agent-harness/blob/1e1f3058fbcdfc752820c7090219858c5b11b12f/agent_harness_demo/ziggy/conversational_workflow.py#L246-L259).
 - A customer would pick their own line: approve bookings only, or allow searches by name. The kit also has an auto mode where an evaluator decides first and escalates to a person; this demo doesn't use it.
 
 **Docs:** [Message passing: Updates](https://docs.temporal.io/encyclopedia/workflow-message-passing#sending-updates), [Temporal Agent Kit](https://github.com/temporal-community/temporal-agent-kit)
@@ -137,7 +137,7 @@ def __init__(self, config: AgentConfig, data: TravelerContext | None = None) -> 
 
 **When to use it:** during beat 2, when the script card appears, or when someone asks what stops model-written code from doing anything it likes.
 
-**Where it is:** [`agent_harness_demo/ziggy/conversational_workflow.py` lines 204–216](https://github.com/temporal-sa/temporal-demo-agent-harness/blob/eda32ba59215508d8c97507683e1551d87d92363/agent_harness_demo/ziggy/conversational_workflow.py#L204-L216) (`code -g agent_harness_demo/ziggy/conversational_workflow.py:204`)
+**Where it is:** [`agent_harness_demo/ziggy/conversational_workflow.py` lines 204–216](https://github.com/temporal-sa/temporal-demo-agent-harness/blob/1e1f3058fbcdfc752820c7090219858c5b11b12f/agent_harness_demo/ziggy/conversational_workflow.py#L204-L216) (`code -g agent_harness_demo/ziggy/conversational_workflow.py:204`)
 
 ```python
 # The single model-facing tool: Code Mode over the travel tools. The model writes a
@@ -168,7 +168,7 @@ self._code_tool = agent.code_mode_tool(
 
 **When to use it:** after beat 4, when someone asks why the bookings came back on their own.
 
-**Where it is:** [`agent_harness_demo/ziggy/activities.py` lines 259–282](https://github.com/temporal-sa/temporal-demo-agent-harness/blob/eda32ba59215508d8c97507683e1551d87d92363/agent_harness_demo/ziggy/activities.py#L259-L282) (`code -g agent_harness_demo/ziggy/activities.py:259`), with the timeout at [lines 67–70](https://github.com/temporal-sa/temporal-demo-agent-harness/blob/eda32ba59215508d8c97507683e1551d87d92363/agent_harness_demo/ziggy/activities.py#L67-L70) and a non-retryable check at [lines 173–177](https://github.com/temporal-sa/temporal-demo-agent-harness/blob/eda32ba59215508d8c97507683e1551d87d92363/agent_harness_demo/ziggy/activities.py#L173-L177)
+**Where it is:** [`agent_harness_demo/ziggy/activities.py` lines 351–375](https://github.com/temporal-sa/temporal-demo-agent-harness/blob/1e1f3058fbcdfc752820c7090219858c5b11b12f/agent_harness_demo/ziggy/activities.py#L351-L375) (`code -g agent_harness_demo/ziggy/activities.py:351`), with the timeout at [lines 70–73](https://github.com/temporal-sa/temporal-demo-agent-harness/blob/1e1f3058fbcdfc752820c7090219858c5b11b12f/agent_harness_demo/ziggy/activities.py#L70-L73) and a non-retryable check at [lines 259–263](https://github.com/temporal-sa/temporal-demo-agent-harness/blob/1e1f3058fbcdfc752820c7090219858c5b11b12f/agent_harness_demo/ziggy/activities.py#L259-L263)
 
 ```python
 _TRAVEL_ACTIVITY_TIMEOUT = timedelta(seconds=30)
@@ -176,7 +176,7 @@ _TRAVEL_ACTIVITY_TIMEOUT = timedelta(seconds=30)
 # ...
 
 def _require_flight(flight_id: str) -> None:
-    if not FLIGHT_ID.match(flight_id):
+    if not (SIMULATED_FLIGHT_ID.match(flight_id) or REAL_FLIGHT_ID.match(flight_id)):
         raise ApplicationError(
             f"No flight {flight_id}; use a flight_id from search_flights.", non_retryable=True
         )
@@ -194,7 +194,8 @@ async def book_flight_activity(request: FlightBookingRequest) -> FlightBookingRe
         "Booking %s (%s) for %s", request.flight_id, request.fare, request.passenger_name
     )
     _require_flight(request.flight_id)
-    fare = next(f for f in _flight(request.flight_id).fares if f.level == request.fare)
+    flight = await _bookable_flight(request.flight_id)
+    fare = next(f for f in flight.fares if f.level == request.fare)
 
     # Simulate the latency of confirming the booking with the airline.
     await asyncio.sleep(random.uniform(4.0, 6.0))
@@ -218,7 +219,7 @@ async def book_flight_activity(request: FlightBookingRequest) -> FlightBookingRe
 
 **When to use it:** during beat 3, when the option cards appear.
 
-**Where it is:** [`agent_harness_demo/ziggy/choices.py` lines 61–65](https://github.com/temporal-sa/temporal-demo-agent-harness/blob/eda32ba59215508d8c97507683e1551d87d92363/agent_harness_demo/ziggy/choices.py#L61-L65) (`code -g agent_harness_demo/ziggy/choices.py:61`)
+**Where it is:** [`agent_harness_demo/ziggy/choices.py` lines 61–65](https://github.com/temporal-sa/temporal-demo-agent-harness/blob/1e1f3058fbcdfc752820c7090219858c5b11b12f/agent_harness_demo/ziggy/choices.py#L61-L65) (`code -g agent_harness_demo/ziggy/choices.py:61`)
 
 ```python
 @agent.callback_tool_defn(inherently_safe=True)
@@ -239,7 +240,7 @@ async def ask_traveler_to_choose(request: ChoiceRequest) -> Choice:
 
 **When to use it:** while bookings land on the departures board, or when someone asks where the board's data comes from.
 
-**Where it is:** [`agent_harness_demo/ziggy/conversational_workflow.py` lines 177–179](https://github.com/temporal-sa/temporal-demo-agent-harness/blob/eda32ba59215508d8c97507683e1551d87d92363/agent_harness_demo/ziggy/conversational_workflow.py#L177-L179) and [`agent_harness_demo/ziggy/trip_board.py` lines 374–383](https://github.com/temporal-sa/temporal-demo-agent-harness/blob/eda32ba59215508d8c97507683e1551d87d92363/agent_harness_demo/ziggy/trip_board.py#L374-L383) (`code -g agent_harness_demo/ziggy/trip_board.py:374`)
+**Where it is:** [`agent_harness_demo/ziggy/conversational_workflow.py` lines 177–179](https://github.com/temporal-sa/temporal-demo-agent-harness/blob/1e1f3058fbcdfc752820c7090219858c5b11b12f/agent_harness_demo/ziggy/conversational_workflow.py#L177-L179) and [`agent_harness_demo/ziggy/trip_board.py` lines 374–383](https://github.com/temporal-sa/temporal-demo-agent-harness/blob/1e1f3058fbcdfc752820c7090219858c5b11b12f/agent_harness_demo/ziggy/trip_board.py#L374-L383) (`code -g agent_harness_demo/ziggy/trip_board.py:374`)
 
 ```python
 @agent.defn(name="ZiggyChatAgent")
@@ -271,7 +272,7 @@ with board.mutate() as draft:
 
 **When to use it:** when someone asks what happens if Gemini is slow or fails.
 
-**Where it is:** [`agent_harness_demo/ziggy/conversational_workflow.py` lines 217–224](https://github.com/temporal-sa/temporal-demo-agent-harness/blob/eda32ba59215508d8c97507683e1551d87d92363/agent_harness_demo/ziggy/conversational_workflow.py#L217-L224) (`code -g agent_harness_demo/ziggy/conversational_workflow.py:217`)
+**Where it is:** [`agent_harness_demo/ziggy/conversational_workflow.py` lines 217–224](https://github.com/temporal-sa/temporal-demo-agent-harness/blob/1e1f3058fbcdfc752820c7090219858c5b11b12f/agent_harness_demo/ziggy/conversational_workflow.py#L217-L224) (`code -g agent_harness_demo/ziggy/conversational_workflow.py:217`)
 
 ```python
 # The Temporal-aware AsyncClient from the Gemini plugin; the runner is wired in so reply
@@ -295,7 +296,7 @@ self._gemini = google_genai_client(
 
 **When to use it:** when someone asks how you change the agent while conversations are open.
 
-**Where it is:** [`agent_harness_demo/worker.py` lines 22–38](https://github.com/temporal-sa/temporal-demo-agent-harness/blob/eda32ba59215508d8c97507683e1551d87d92363/agent_harness_demo/worker.py#L22-L38) (`code -g agent_harness_demo/worker.py:22`)
+**Where it is:** [`agent_harness_demo/worker.py` lines 22–38](https://github.com/temporal-sa/temporal-demo-agent-harness/blob/1e1f3058fbcdfc752820c7090219858c5b11b12f/agent_harness_demo/worker.py#L22-L38) (`code -g agent_harness_demo/worker.py:22`)
 
 ```python
 def deployment_config() -> WorkerDeploymentConfig | None:
@@ -329,7 +330,7 @@ def deployment_config() -> WorkerDeploymentConfig | None:
 
 **When to use it:** when someone asks what a session is, or what happens to abandoned ones.
 
-**Where it is:** [`agent_harness_demo/web.py` lines 276–283](https://github.com/temporal-sa/temporal-demo-agent-harness/blob/eda32ba59215508d8c97507683e1551d87d92363/agent_harness_demo/web.py#L276-L283) (`code -g agent_harness_demo/web.py:276`), with the timeout from [`agent_harness_demo/config.py` lines 21–23](https://github.com/temporal-sa/temporal-demo-agent-harness/blob/eda32ba59215508d8c97507683e1551d87d92363/agent_harness_demo/config.py#L21-L23)
+**Where it is:** [`agent_harness_demo/web.py` lines 321–329](https://github.com/temporal-sa/temporal-demo-agent-harness/blob/1e1f3058fbcdfc752820c7090219858c5b11b12f/agent_harness_demo/web.py#L321-L329) (`code -g agent_harness_demo/web.py:321`), with the idle close and the timeout from [`agent_harness_demo/config.py` lines 22–29](https://github.com/temporal-sa/temporal-demo-agent-harness/blob/1e1f3058fbcdfc752820c7090219858c5b11b12f/agent_harness_demo/config.py#L22-L29)
 
 ```python
 agent_config = AgentConfig(close_after_idle=config.SESSION_IDLE_CLOSE)
@@ -366,8 +367,8 @@ SESSION_TIMEOUT = timedelta(hours=float(os.environ.get("SESSION_TIMEOUT_HOURS", 
 
 When someone asks what they'd change for their own system, these are the parts to leave out:
 
-- **The travel tools are simulated.** [`agent_harness_demo/ziggy/activities.py` lines 1–7](https://github.com/temporal-sa/temporal-demo-agent-harness/blob/eda32ba59215508d8c97507683e1551d87d92363/agent_harness_demo/ziggy/activities.py#L1-L7): each Activity sleeps and returns data derived from its inputs. Replace the bodies with real API calls, with an idempotency key on each booking.
-- **Per-person scoping lives in the web API.** [`agent_harness_demo/web.py` lines 109–142](https://github.com/temporal-sa/temporal-demo-agent-harness/blob/eda32ba59215508d8c97507683e1551d87d92363/agent_harness_demo/web.py#L109-L142) hashes the catalog's sign-in header into the Workflow ID prefix and checks it on every route. A customer would use their own auth.
+- **Most travel tools are simulated.** [`agent_harness_demo/ziggy/activities.py` lines 1–9](https://github.com/temporal-sa/temporal-demo-agent-harness/blob/1e1f3058fbcdfc752820c7090219858c5b11b12f/agent_harness_demo/ziggy/activities.py#L1-L9): flight search is real Google Flights data when `SERPAPI_API_KEY` is set; seat maps, bookings, and hotels sleep and return data derived from their inputs. Replace those bodies with real API calls, with an idempotency key on each booking.
+- **Per-person scoping lives in the web API.** [`agent_harness_demo/web.py` lines 120–153](https://github.com/temporal-sa/temporal-demo-agent-harness/blob/1e1f3058fbcdfc752820c7090219858c5b11b12f/agent_harness_demo/web.py#L120-L153) hashes the catalog's sign-in header into the Workflow ID prefix and checks it on every route. A customer would use their own auth.
 - **The scripted trip uses a different agent.** `scripts/preview_trip.py` starts `ZiggyDynamicAgent`, which has no model and runs the script it's sent. It turns approvals on for the preview; on its own it skips them.
 
 ## Reset and tear down
