@@ -94,7 +94,7 @@
 
   {#if sessionId}
     {#key sessionId}
-      <Trip {sessionId} />
+      <Trip {sessionId} {newTrip} />
     {/key}
   {:else if !loadError}
     <div class="card starting" role="status">

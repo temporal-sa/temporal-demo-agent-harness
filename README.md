@@ -87,7 +87,7 @@ Changes from the upstream example:
 - **Per-person isolation.** Session IDs are `<task queue>.<owner>.<session>`, where `owner` is a hash of `X-Temporal-Auth-Subject`. Every route that names a session returns 404 unless the caller owns it, or owns the agent that started it as a subagent.
 - **Task queue from one variable.** The web and worker processes both read `TEMPORAL_TASK_QUEUE`. Subagents run on their parent's queue (`workflow.info().task_queue`) rather than a hard-coded one.
 - **Init data checked before the start.** The kit's web app only checks that an agent gets init data when it requires it, and leaves the contents to the agent. This API also validates the data against the agent's model and refuses bad data with a 422, so it never starts a session the agent would refuse.
-- **Bounded sessions.** Agents wait for messages indefinitely, so every session starts with a Workflow execution timeout (`SESSION_TIMEOUT_HOURS`, 24 by default). Subagents close with their parent.
+- **Bounded sessions.** Every session starts with Agent Kit's `close_after_idle` (`SESSION_IDLE_CLOSE_MINUTES`, 30 by default), so an agent nobody is talking to closes itself, and a Workflow execution timeout (`SESSION_TIMEOUT_HOURS`, 24 by default) as the backstop for one left waiting on an approval. Subagents close with their parent. A closed trip stays readable: the demo view shows it with a **Start a new trip** button, `/api/sessions` lists closed sessions too, so the console can open them, and a message sent to a closed session gets a 409 `session_closed` rather than a bare 500.
 
 ## Configuration
 
@@ -101,7 +101,8 @@ Changes from the upstream example:
 | `PAYLOAD_DIR` | both | kit default | Local directory for those payloads when no bucket is set. Web and worker must share it. |
 | `TRUST_AUTH_HEADERS` | web | `false` | Read the user from `X-Temporal-Auth-Subject`. Set it only behind the catalog ingress. |
 | `DEV_USER` | web | `local-dev` | The user when auth headers aren't trusted. |
-| `SESSION_TIMEOUT_HOURS` | web | `24` | Execution timeout for each session. |
+| `SESSION_IDLE_CLOSE_MINUTES` | web | `30` | A session nobody has messaged for this long closes itself (Agent Kit's `close_after_idle`). A turn waiting on an approval or a choice isn't idle. `0` turns it off. |
+| `SESSION_TIMEOUT_HOURS` | web | `24` | Execution timeout for each session: the backstop for one that never goes idle. |
 | `TEMPORAL_UI_URL` | web | Cloud or `localhost:8233`, from the address | Base URL of the Temporal UI, for the demo view's **Temporal UI** link. A full namespace URL is used as it is. |
 | `TEMPORAL_UI_NAMESPACE` | web | The connected namespace | Namespace that link opens under `TEMPORAL_UI_URL`. |
 | `TEMPORAL_DEPLOYMENT_NAME`, `TEMPORAL_WORKER_BUILD_ID` | worker | unset | Set by the catalog's Worker Controller to turn on Worker Versioning. |

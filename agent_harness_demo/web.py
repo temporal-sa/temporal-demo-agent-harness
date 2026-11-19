@@ -253,11 +253,13 @@ def create_app() -> FastAPI:
         ]
         return JSONResponse({"agents": agents}, headers=NO_STORE)
 
-    async def running_sessions(prefix: str) -> list[dict]:
+    async def owned_sessions(prefix: str, *, running: bool) -> list[dict]:
+        """The caller's running sessions, or their closed ones (up to SESSION_LIST_LIMIT)."""
         types = " OR ".join(f"WorkflowType='{t}'" for t in agent_types)
+        status = "ExecutionStatus='Running'" if running else "ExecutionStatus!='Running'"
         query = (
             f"TaskQueue='{config.TASK_QUEUE}' AND WorkflowId STARTS_WITH '{prefix}' "
-            f"AND ExecutionStatus='Running' AND ({types})"
+            f"AND {status} AND ({types})"
         )
         sessions = [
             Session(
@@ -286,14 +288,19 @@ def create_app() -> FastAPI:
             {
                 "session_prefix": prefix,
                 "temporal_ui_url": config.temporal_ui_url(temporal().namespace),
-                "sessions": await running_sessions(prefix),
+                "sessions": await owned_sessions(prefix, running=True),
             },
             headers=NO_STORE,
         )
 
     @api.get("/sessions")
     async def list_sessions(prefix: Owner):
-        return await running_sessions(prefix)
+        # Closed ones too: the console opens only sessions it finds here, so without them a link
+        # to a trip that closed (after sitting idle, say) would read as a missing session.
+        running, closed = await asyncio.gather(
+            owned_sessions(prefix, running=True), owned_sessions(prefix, running=False)
+        )
+        return running + closed
 
     @api.post("/sessions")
     async def create_session(req: CreateSessionRequestBody, prefix: Owner):
@@ -311,10 +318,11 @@ def create_app() -> FastAPI:
             suffix = suffix[len(prefix) :]
         if not SESSION_SUFFIX.fullmatch(suffix):
             raise HTTPException(status_code=422, detail="Invalid session ID")
+        agent_config = AgentConfig(close_after_idle=config.SESSION_IDLE_CLOSE)
         try:
             handle = await temporal().start_workflow(
                 req.agent_workflow_type,
-                args=[AgentConfig()] if data is None else [AgentConfig(), data],
+                args=[agent_config] if data is None else [agent_config, data],
                 id=prefix + suffix,
                 task_queue=config.TASK_QUEUE,
                 execution_timeout=config.SESSION_TIMEOUT,
@@ -452,7 +460,23 @@ def _message_parts(req: ChatRequestBody) -> tuple[str, dict]:
 
 
 def _add_error_handlers(app: FastAPI) -> None:
-    """The same status codes and bodies the kit's app returns, which the UI relies on."""
+    """The same status codes and bodies the kit's app returns, which the UI relies on, plus
+    one for a session that has closed."""
+
+    @app.exception_handler(RPCError)
+    async def session_closed(_, exc: RPCError):
+        # Temporal answers NOT_FOUND to an Update or Signal for a workflow that has completed,
+        # which a session does once it closes itself after sitting idle. The kit's app lets that
+        # through as a bare 500; say what happened instead. Anything else stays a 500.
+        if exc.status != RPCStatusCode.NOT_FOUND:
+            return JSONResponse(status_code=500, content={"error": "temporal", "message": str(exc)})
+        return JSONResponse(
+            status_code=409,
+            content={
+                "error": "session_closed",
+                "message": f"This session has closed and takes no more messages ({exc.message}).",
+            },
+        )
 
     @app.exception_handler(JoinedTurnError)
     async def joined_turn(_, exc: JoinedTurnError):
