@@ -232,7 +232,7 @@ async def ask_traveler_to_choose(request: ChoiceRequest) -> Choice:
 
 - A callback tool has no body. When the script calls it, the kit publishes the request on the session's event stream and waits in the Workflow until a client sends the answer as a `provide_callback_result` Update.
 - The demo view draws the request as cards and sends the click back. The kit validates the answer against `Choice` before the script gets it, so the script books exactly the option and fare the traveler picked.
-- No `timeout` is set, so the wait is unbounded, and like the approval gate it holds no worker resources. The session's 24-hour execution timeout is the only limit.
+- No `timeout` is set, so the wait is unbounded, and like the approval gate it holds no worker resources. A turn waiting on a choice is not idle, so the idle close never ends it; the session's 24-hour execution timeout is the only limit.
 - A customer's version might be a mobile push, a Slack button, or a manager's sign-off. The tool definition stays the same; only the client that answers changes.
 
 ### The trip board is Workflow state the page watches
@@ -325,17 +325,18 @@ def deployment_config() -> WorkerDeploymentConfig | None:
 
 **Docs:** [Worker Versioning](https://docs.temporal.io/worker-versioning)
 
-### One Workflow per conversation, closed after a day
+### One Workflow per conversation, closed when it sits idle
 
 **When to use it:** when someone asks what a session is, or what happens to abandoned ones.
 
 **Where it is:** [`agent_harness_demo/web.py` lines 276–283](https://github.com/temporal-sa/temporal-demo-agent-harness/blob/eda32ba59215508d8c97507683e1551d87d92363/agent_harness_demo/web.py#L276-L283) (`code -g agent_harness_demo/web.py:276`), with the timeout from [`agent_harness_demo/config.py` lines 21–23](https://github.com/temporal-sa/temporal-demo-agent-harness/blob/eda32ba59215508d8c97507683e1551d87d92363/agent_harness_demo/config.py#L21-L23)
 
 ```python
+agent_config = AgentConfig(close_after_idle=config.SESSION_IDLE_CLOSE)
 try:
     handle = await temporal().start_workflow(
         req.agent_workflow_type,
-        args=[AgentConfig()] if data is None else [AgentConfig(), data],
+        args=[agent_config] if data is None else [agent_config, data],
         id=prefix + suffix,
         task_queue=config.TASK_QUEUE,
         execution_timeout=config.SESSION_TIMEOUT,
@@ -343,15 +344,22 @@ try:
 ```
 
 ```python
-# Agents wait for their next message indefinitely, so an abandoned session is closed by
-# Temporal when this runs out. Subagents close with their parent.
+# An agent nobody has sent a message for this long closes itself (Agent Kit's
+# close_after_idle). A turn waiting on an approval or a choice is not idle, so it never closes
+# one that way; 0 turns it off. Subagents close with their parent.
+SESSION_IDLE_CLOSE = timedelta(minutes=float(os.environ.get("SESSION_IDLE_CLOSE_MINUTES", "30")))
+
+# The backstop: a session still open after this, waiting on an approval nobody gives for
+# example, is closed by Temporal.
 SESSION_TIMEOUT = timedelta(hours=float(os.environ.get("SESSION_TIMEOUT_HOURS", "24")))
 ```
 
 **What you need to understand:**
 
 - **New trip** starts one agent Workflow. Its ID is `<task queue>.<owner hash>.<session>`, so each signed-in person lists and opens only their own trips.
-- The agent waits for its next message indefinitely, so the execution timeout (24 hours by default, `SESSION_TIMEOUT_HOURS`) is what closes an abandoned session.
+- Between messages the agent waits durably and uses no worker. Once nobody has sent it a message for 30 minutes (`SESSION_IDLE_CLOSE_MINUTES`), the Agent Kit runner closes it: the Workflow publishes `agent_closed` with reason `idle_timeout_expired` and completes. A turn waiting on an approval or a choice is not idle.
+- The execution timeout (24 hours by default, `SESSION_TIMEOUT_HOURS`) is the backstop for a session that never goes idle, such as one left waiting on an approval.
+- A closed trip stays readable. The demo view shows its board and conversation with a **trip closed** card and a **Start a new trip** button, and the console lists it as closed.
 - A production agent might instead run for weeks and use Continue-As-New to keep its history short; this demo's sessions are short enough not to need it.
 
 ### What's demo-only
@@ -364,7 +372,7 @@ When someone asks what they'd change for their own system, these are the parts t
 
 ## Reset and tear down
 
-- **Between runs:** press **New trip**. The old trip stays open in Temporal until its 24-hour execution timeout, but the page moves to the new one. To end a session sooner, terminate its Workflow from the Temporal UI.
+- **Between runs:** press **New trip**. The old trip closes itself after 30 minutes without a message (`SESSION_IDLE_CLOSE_MINUTES`), or at its 24-hour execution timeout if it is waiting on an approval; the page moves to the new one at once. To end a session sooner, use **End session** in the console or terminate its Workflow from the Temporal UI.
 - **To stop locally:** stop the web, the worker, and the dev server with `Ctrl-C`. `temporal server start-dev` keeps its data in memory, so stopping it discards every session.
 - **On tmprl-demo.cloud:** press **Delete** on the environment card when you're done, or let it expire; **Extend +1h** gives you more time.
 
@@ -372,6 +380,7 @@ When someone asks what they'd change for their own system, these are the parts t
 
 | What you see | Likely cause | Fix |
 |---|---|---|
+| The trip shows a **trip closed** card and no message box | Nobody sent it a message for `SESSION_IDLE_CLOSE_MINUTES` (30 by default), so the agent closed itself, or it reached its 24-hour execution timeout | Press **Start a new trip**. To keep a trip open longer while presenting, set `SESSION_IDLE_CLOSE_MINUTES` higher on the web process (0 turns it off) |
 | `/` opens the Agent Kit console, not the demo view | The UI wasn't built | Run `(cd ui && npm ci && npm run build)` and restart the web process |
 | The worker exits with "GEMINI_API_KEY is not set" | No key in the worker's environment | Export `GEMINI_API_KEY`; for the scripted trip any value works |
 | A message stays "Sending…" and the yellow **reconnecting** card shows | No worker is polling the Task Queue. A message is an Update, and a worker has to accept it | Start the worker. On tmprl-demo.cloud, press **Scale up workers** if the card shows "Workers scaled to zero" |
