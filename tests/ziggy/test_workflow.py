@@ -19,7 +19,7 @@ from temporalio.contrib.workflow_streams import WorkflowStreamClient
 from tests.temporal_env import start_workflow_environment
 from temporalio.worker import Worker
 
-from temporal_agent_harness.harness.agent_protocol import (
+from temporal_agent_kit.agent_protocol import (
     SEND_AGENT_MESSAGE_UPDATE,
     TURN_EVENTS_TOPIC,
     AgentConfig,
@@ -29,7 +29,7 @@ from temporal_agent_harness.harness.agent_protocol import (
     AgentMessageReply,
 )
 
-from temporal_agent_harness.plugin import AgentHarnessPlugin
+from temporal_agent_kit.plugin import AgentKitPlugin
 
 from agent_harness_demo.ziggy import activities
 from agent_harness_demo.ziggy.workflow import ZiggyDynamicAgentWorkflow
@@ -41,14 +41,14 @@ async def client_and_queue():
         data_converter=pydantic_data_converter
     )
     task_queue = f"ziggy-agent-test-{uuid.uuid4()}"
-    # Mirrors agent_harness_demo/worker.py: the harness plugin registers the travel tools' activity
+    # Mirrors agent_harness_demo/worker.py: the kit plugin registers the travel tools' activity
     # bodies. (Passed to the Worker rather than the
     # client because the test env's client is already connected.)
     async with Worker(
         env.client,
         task_queue=task_queue,
         workflows=[ZiggyDynamicAgentWorkflow],
-        plugins=[AgentHarnessPlugin(tools=activities.ALL_TOOLS)],
+        plugins=[AgentKitPlugin(tools=activities.ALL_TOOLS)],
     ):
         try:
             yield env.client, task_queue

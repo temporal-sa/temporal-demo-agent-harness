@@ -1,4 +1,5 @@
-import type { AgentView, ToolPart } from "@temporalio/agent-harness-client";
+import type { AgentView, ToolPart } from "@temporalio/agent-kit-client";
+import { outputField } from "./format.ts";
 import type { TripBoard } from "./generated/ZiggyChatAgent.ts";
 
 /** Where one flight or hotel stands, from its first search to its confirmation. */
@@ -70,11 +71,10 @@ function request(part: ToolPart): Record<string, string> {
   return ((input.request ?? input) as Record<string, string>) ?? {};
 }
 
-/** The confirmation code in a finished booking call's output, which prints the response
- *  Python-style (`confirmation_code='AIR-…'`) or as JSON. */
+/** The confirmation code in a finished booking call's output. */
 function confirmationCode(part: ToolPart): string {
-  if (part.state !== "done" || !part.output) return "";
-  return /confirmation_code['"]?\s*[:=]\s*['"]([^'"]+)['"]/.exec(part.output)?.[1] ?? "";
+  if (part.state !== "done") return "";
+  return outputField(part, "confirmation_code") ?? "";
 }
 
 function stageOf(part: ToolPart, kind: "search" | "book"): Stage {

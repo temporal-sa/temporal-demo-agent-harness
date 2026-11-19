@@ -1,5 +1,5 @@
-import type { ToolPart } from "@temporalio/agent-harness-client";
-import { usd } from "./format.ts";
+import type { ToolPart } from "@temporalio/agent-kit-client";
+import { outputField, usd } from "./format.ts";
 
 /** The callback tools Ziggy uses to ask the traveler to pick between trip options or hotels. */
 export const CHOICE_TOOL = "ask_traveler_to_choose";
@@ -74,11 +74,14 @@ export function hotelRequest(part: ToolPart): {
   };
 }
 
-/** The traveler's answer, read off the tool's output, which prints the model Python-style. */
+/** The traveler's answer, read off the tool's output. */
 export function answeredChoice(part: ToolPart): Choice | null {
   if (!part.output) return null;
-  const field = (name: string) => new RegExp(`${name}='([^']*)'`).exec(part.output ?? "")?.[1] ?? null;
-  return { option_id: field("option_id"), fare: field("fare") as Fare | null, comment: field("comment") };
+  return {
+    option_id: outputField(part, "option_id"),
+    fare: outputField(part, "fare") as Fare | null,
+    comment: outputField(part, "comment"),
+  };
 }
 
 /** One line for the conversation: what was picked, or what the traveler asked for instead. */
@@ -96,9 +99,8 @@ export function choiceSummary(part: ToolPart): string {
 
 function hotelSummary(part: ToolPart): string {
   if (!part.output) return "";
-  const field = (name: string) => new RegExp(`${name}='([^']*)'`).exec(part.output ?? "")?.[1] ?? null;
-  const id = field("hotel_id");
-  const comment = field("comment");
+  const id = outputField(part, "hotel_id");
+  const comment = outputField(part, "comment");
   if (!id) return comment ? `None of these: “${comment}”` : "None of these";
   const hotel = hotelRequest(part).options.find((h) => h.hotel_id === id);
   return hotel ? `${hotel.name} · ${usd.format(hotel.total_usd)}` : id;

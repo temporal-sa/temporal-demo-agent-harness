@@ -47,22 +47,22 @@ with workflow.unsafe.imports_passed_through():
         FunctionResultStepParam,
     )
     from google.genai.client import AsyncClient
-    from temporal_agent_harness.ai_sdks.google_genai_plugin import (
+    from temporal_agent_kit.ai_sdks.google_genai_plugin import (
         InteractionConversation,
         function_param,
         google_genai_client,
     )
     from pydantic import BaseModel
 
-    from temporal_agent_harness.harness import agent
-    from temporal_agent_harness.harness.agent_protocol import (
+    from temporal_agent_kit import agent
+    from temporal_agent_kit.agent_protocol import (
         AgentConfig,
         MidTurn,
         TextMessage,
         TextReply,
         ToolApprovalPolicy,
     )
-    from temporal_agent_harness.harness.agent_workflow import AgentWorkflowRunner
+    from temporal_agent_kit.agent_workflow import AgentWorkflowRunner
 
     from .conversational_workflow import (
         BOOKING_GUIDANCE,

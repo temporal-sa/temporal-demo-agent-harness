@@ -11,7 +11,7 @@ import httpx
 import pytest
 import pytest_asyncio
 
-from temporal_agent_harness.plugin import AgentHarnessPlugin
+from temporal_agent_kit.plugin import AgentKitPlugin
 
 from agent_harness_demo import config, web
 from tests.temporal_env import start_workflow_environment
@@ -21,7 +21,7 @@ CHAT_AGENT = "ZiggyChatAgent"
 
 @pytest_asyncio.fixture(scope="module")
 async def temporal():
-    env = await start_workflow_environment(plugins=[AgentHarnessPlugin()])
+    env = await start_workflow_environment(plugins=[AgentKitPlugin()])
     yield env.client
     await env.shutdown()
 

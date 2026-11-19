@@ -1,6 +1,6 @@
 """Asking the traveler to choose between trip options or hotels, answered in their browser.
 
-`ask_traveler_to_choose` and `ask_traveler_to_choose_hotel` are harness *callback tools*: they
+`ask_traveler_to_choose` and `ask_traveler_to_choose_hotel` are kit *callback tools*: they
 have no body. When a script calls it,
 the agent publishes the options and waits, durably and for as long as it takes, until a client
 answers. The demo view draws each option as a card and answers with the traveler's pick, so
@@ -12,7 +12,7 @@ converter, like the rest of the agent's Temporal-facing modules.
 
 from pydantic import BaseModel
 
-from temporal_agent_harness.harness import agent
+from temporal_agent_kit import agent
 
 from .travel_models import FareLevel
 

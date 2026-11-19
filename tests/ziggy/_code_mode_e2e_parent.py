@@ -25,13 +25,13 @@ from temporalio.workflow import ActivityConfig
 with workflow.unsafe.imports_passed_through():
     from pydantic import BaseModel, Field
 
-    from temporal_agent_harness.harness import agent
-    from temporal_agent_harness.harness.agent_protocol import (
+    from temporal_agent_kit import agent
+    from temporal_agent_kit.agent_protocol import (
         AgentConfig,
         TextReply,
         ToolApprovalPolicy,
     )
-    from temporal_agent_harness.harness.agent_workflow import AgentWorkflowRunner
+    from temporal_agent_kit.agent_workflow import AgentWorkflowRunner
 
 
 _ACTIVITY_CONFIG = ActivityConfig(start_to_close_timeout=timedelta(seconds=10))
@@ -83,7 +83,7 @@ async def greet_tool(request: GreetRequest) -> GreetResponse:
 @agent.activity_tool_defn(name="echo", activity_config=_ACTIVITY_CONFIG)
 async def echo_tool(secret: agent.Injected[str], label: str) -> EchoResponse:
     """Echo ``label`` together with a server-side secret. ``secret`` is workflow-injected —
-    hidden from the script and supplied by the harness, so the host function is ``echo(label)``."""
+    hidden from the script and supplied by the kit, so the host function is ``echo(label)``."""
     return EchoResponse(value=f"{label}:{secret}")
 
 
@@ -96,7 +96,7 @@ async def explode_tool(reason: str) -> str:
 # The tool set exposed through Code Mode — also what the test worker registers activities for.
 CODE_MODE_TOOLS = [add_tool, greet_tool, echo_tool, explode_tool]
 
-# The value the harness injects for echo_tool's Injected[str] `secret` — the script never sees it.
+# The value the kit injects for echo_tool's Injected[str] `secret` — the script never sees it.
 INJECTED_SECRET = "s3cr3t"
 
 

@@ -1,12 +1,12 @@
 [project]
 name = "temporal-demo-agent-harness"
 version = "0.1.0"
-description = "Ziggy, a durable travel agent on the Temporal Agent Harness, packaged for the tmprl-demo.cloud catalog."
+description = "Ziggy, a durable travel agent on Temporal Agent Kit, packaged for the tmprl-demo.cloud catalog."
 requires-python = ">=3.12"
 dependencies = [
-    "temporal-agent-harness[genai,code-mode,ui,s3]==0.6.0",
-    # The harness's Gemini plugin imports google.genai._interactions, which 2.9.0 removed.
-    # The harness only asks for >=2.0.0; this matches the 2.8.0 its own lockfile tests.
+    "temporal-agent-kit[genai,code-mode,ui,s3]==0.12.1",
+    # Agent Kit's Gemini plugin imports google.genai._interactions, which 2.9.0 removed.
+    # The kit only asks for >=2.0.0; this matches the 2.8.0 its own lockfile tests.
     "google-genai>=2.8,<2.9",
     # Real flight search (ziggy/google_flights.py). Already installed through google-genai.
     "httpx>=0.28",
