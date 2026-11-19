@@ -8,8 +8,8 @@
     "check": "svelte-check --tsconfig ./tsconfig.json"
   },
   "dependencies": {
-    "@temporalio/agent-harness-client": "0.1.0",
-    "@temporalio/agent-harness-svelte": "0.1.0",
+    "@temporalio/agent-kit-client": "0.6.1",
+    "@temporalio/agent-kit-svelte": "0.6.1",
     "d3-geo": "3.1.1",
     "highlight.js": "11.12.0",
     "topojson-client": "3.1.0",

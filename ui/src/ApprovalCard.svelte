@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { WaitingToolCall } from "@temporalio/agent-harness-client";
+  import type { WaitingToolCall } from "@temporalio/agent-kit-client";
   import Code from "./Code.svelte";
   import { toolLabel } from "./format.ts";
 

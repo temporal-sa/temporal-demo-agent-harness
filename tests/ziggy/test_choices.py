@@ -13,8 +13,8 @@ from temporalio.contrib.pydantic import pydantic_data_converter
 from temporalio.contrib.workflow_streams import WorkflowStreamClient
 from temporalio.worker import Worker
 
-from temporal_agent_harness.harness.agent_client import AgentClient
-from temporal_agent_harness.harness.agent_protocol import (
+from temporal_agent_kit.agent_client import AgentClient
+from temporal_agent_kit.agent_protocol import (
     SEND_AGENT_MESSAGE_UPDATE,
     TURN_EVENTS_TOPIC,
     AgentConfig,
@@ -23,7 +23,7 @@ from temporal_agent_harness.harness.agent_protocol import (
     AgentMessage,
     AgentMessageReply,
 )
-from temporal_agent_harness.plugin import AgentHarnessPlugin
+from temporal_agent_kit.plugin import AgentKitPlugin
 
 from agent_harness_demo.ziggy import activities
 from agent_harness_demo.ziggy.workflow import ZiggyDynamicAgentWorkflow
@@ -59,7 +59,7 @@ async def client_and_queue():
         env.client,
         task_queue=task_queue,
         workflows=[ZiggyDynamicAgentWorkflow],
-        plugins=[AgentHarnessPlugin(tools=activities.ALL_TOOLS)],
+        plugins=[AgentKitPlugin(tools=activities.ALL_TOOLS)],
     ):
         try:
             yield env.client, task_queue

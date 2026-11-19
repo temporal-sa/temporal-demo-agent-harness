@@ -1,11 +1,11 @@
 """Ziggy dynamic agent: each turn runs a caller-supplied Python script (no model in the loop).
 
-A deliberately minimal harness agent. Each turn carries an arbitrary Python *script* (see
+A deliberately minimal kit agent. Each turn carries an arbitrary Python *script* (see
 :class:`RunScript`) that runs in a sandbox whose only escape hatches are the travel host
 functions — each backed by a durable Temporal activity. There is no model in the loop: the
 "plan" arrives pre-written as the script.
 
-It's a thin consumer of the harness Code Mode feature: :func:`agent.code_mode_tool` turns the
+It's a thin consumer of the kit Code Mode feature: :func:`agent.code_mode_tool` turns the
 travel activity tools into a single run-a-script tool, and the ``run_script`` handler dispatches
 the caller's script straight through it. The script calls the tools as async host functions;
 each host call runs as a durable, approval-gated activity, and independent calls can run
@@ -13,7 +13,7 @@ concurrently via ``asyncio.gather``.
 
 Contrast with the conversational Ziggy agent (``conversational_workflow.py``): that one drives
 the Gemini Interactions API with a model in the loop, over the same Code Mode tool. This one has
-no model — the script is the input. Both reuse the standard harness contract: ``@agent.defn`` +
+no model — the script is the input. Both reuse the standard kit contract: ``@agent.defn`` +
 an :class:`AgentWorkflowRunner` built in ``@agent.init``, the turn loop driven by the ``run``
 that ``@agent.defn`` generates, and a single ``@agent.accepts`` handler (``run_script``) whose return
 value becomes the turn's reply.
@@ -25,14 +25,14 @@ from temporalio import workflow
 from temporalio.contrib.workflow_streams import WorkflowStream
 
 with workflow.unsafe.imports_passed_through():
-    from temporal_agent_harness.harness import agent
-    from temporal_agent_harness.harness.agent_protocol import (
+    from temporal_agent_kit import agent
+    from temporal_agent_kit.agent_protocol import (
         AgentConfig,
         MidTurn,
         TextReply,
         ToolApprovalPolicy,
     )
-    from temporal_agent_harness.harness.agent_workflow import AgentWorkflowRunner
+    from temporal_agent_kit.agent_workflow import AgentWorkflowRunner
 
     from . import activities, choices, trip_board
     from .models import RunScript

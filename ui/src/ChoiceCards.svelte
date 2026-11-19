@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { ToolPart } from "@temporalio/agent-harness-client";
+  import type { ToolPart } from "@temporalio/agent-kit-client";
   import { FARE_LABEL, HOTEL_TOOL, choiceRequest, hotelRequest, type Choice, type HotelChoice } from "./choices.ts";
   import { usd } from "./format.ts";
 

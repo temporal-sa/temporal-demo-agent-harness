@@ -11,7 +11,7 @@ from temporalio.client import Client, Plugin
 from temporalio.converter import ExternalStorage
 from temporalio.envconfig import ClientConfig
 
-from temporal_agent_harness.utils.large_payload import local_payload_storage, s3_payload_storage
+from temporal_agent_kit.utils.large_payload import local_payload_storage, s3_payload_storage
 
 REGISTRY_PATH = Path(__file__).parent / "ziggy" / "agents.toml"
 
@@ -41,7 +41,7 @@ def temporal_ui_url(namespace: str) -> str:
 
 
 async def payload_storage() -> ExternalStorage:
-    """Where the harness offloads payloads above ~1.5 MB (sandbox snapshots, long histories).
+    """Where the kit offloads payloads above ~1.5 MB (sandbox snapshots, long histories).
 
     Every process must use the same backend. Hosted pods share an S3 bucket; Compose shares
     a volume. Objects are keyed by content hash, so workspaces sharing a bucket can't collide.

@@ -1,12 +1,12 @@
 <script lang="ts">
-  import type { HarnessMessage, MessagePart, ToolPart } from "@temporalio/agent-harness-client";
+  import type { KitMessage, MessagePart, ToolPart } from "@temporalio/agent-kit-client";
   import { policyLabel, toolBadge, toolLabel } from "./format.ts";
   import { choiceRequest, choiceSummary, isChoiceTool } from "./choices.ts";
   import Code from "./Code.svelte";
   import Markdown from "./Markdown.svelte";
   import type { ZiggyChatAgent } from "./generated/ZiggyChatAgent.ts";
 
-  type Message = HarnessMessage<ZiggyChatAgent>;
+  type Message = KitMessage<ZiggyChatAgent>;
   /** A message's parts in the order they streamed, with adjacent text deltas joined. */
   type Segment =
     | { kind: "text"; text: string }

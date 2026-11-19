@@ -1,10 +1,10 @@
-# Agent Harness: Ziggy the travel agent
+# Agent Kit: Ziggy the travel agent
 
-Ziggy is a conversational travel agent built on the [Temporal Agent Harness](https://github.com/temporal-community/temporal-agent-harness). You ask for a trip, and the model writes a short Python script that runs in a [pydantic-monty](https://pypi.org/project/pydantic-monty/) sandbox. Each flight or hotel search, seat map, and booking in that script is a durable Temporal Activity, and each tool call waits for your approval. Flights come in economy, premium, and business fares. When Ziggy has options to offer, it shows them as cards in your browser and waits for you to pick one: that question is a harness callback tool, answered by the page rather than a worker, and the Workflow holds it durably until you choose. After booking, Ziggy offers seats from the flight's seat map, with each seat's perks and drawbacks. The trip board shows what's booked and what's left, and it updates as the bookings land.
+Ziggy is a conversational travel agent built on [Temporal Agent Kit](https://github.com/temporal-community/temporal-agent-kit). You ask for a trip, and the model writes a short Python script that runs in a [pydantic-monty](https://pypi.org/project/pydantic-monty/) sandbox. Each flight or hotel search, seat map, and booking in that script is a durable Temporal Activity, and each tool call waits for your approval. Flights come in economy, premium, and business fares. When Ziggy has options to offer, it shows them as cards in your browser and waits for you to pick one: that question is an Agent Kit callback tool, answered by the page rather than a worker, and the Workflow holds it durably until you choose. After booking, Ziggy offers seats from the flight's seat map, with each seat's perks and drawbacks. The trip board shows what's booked and what's left, and it updates as the bookings land.
 
 Because the conversation is a Workflow, you can kill the worker in the middle of a booking. When a worker comes back, the agent carries on from the same step, with the same approvals and the same trip board.
 
-This repository is the tmprl-demo.cloud catalog version of the harness's [Monty example](https://github.com/temporal-community/temporal-agent-harness/tree/0.6.0/examples/monty). It replaces the adapter in the registry repo (`deployments/monty/`), which downloaded a pinned upstream tarball and patched it during the image build.
+This repository is the tmprl-demo.cloud catalog version of the kit's [Monty example](https://github.com/temporal-community/temporal-agent-kit/tree/0.6.0/examples/monty), copied when the kit was still Temporal Agent Harness 0.6.0 and since ported to Agent Kit 0.12.1. It replaces the adapter in the registry repo (`deployments/monty/`), which downloaded a pinned upstream tarball and patched it during the image build.
 
 The upstream example names its agent Monty, after the sandbox. Here the agent is Ziggy, Temporal's mascot, so "Monty" only ever means the pydantic-monty sandbox that runs the scripts.
 
@@ -13,13 +13,13 @@ The upstream example names its agent Monty, after the sandbox. Here the agent is
 The app has two views of the same sessions, and each links to the other with the session kept:
 
 - **Demo view** (`/`): the trip board, the conversation, and approval cards, in the Temporal demo theme. Visitors land here.
-- **Harness console** (`/console/`): the harness's own UI, unchanged, with the state flow, raw events, and a replay scrubber. Open it from **Harness console** in the header; **← Demo view** in its top bar comes back.
+- **Agent Kit console** (`/console/`): the kit's own UI, unchanged, with the state flow, raw events, and a replay scrubber. Open it from **Agent Kit console** in the header; **← Demo view** in its top bar comes back.
 
 1. Open the app. It starts a trip, or resumes your most recent one.
 2. Ask: *"Book me a flight from SFO to JFK on November 3 and a hotel for three nights. Traveler is Ada Lovelace."*
 3. Pick an itinerary and fare from the option cards, then approve each card as it appears: the script Ziggy wrote, then each search and booking that script makes. Bookings land on the departures board as they happen.
 4. In a crashable workspace, choose **Crash Workers** while a booking is in progress. The page stays up and says the worker isn't answering. When the replacement worker starts, the turn finishes where it stopped.
-5. Open **Harness console** to show the same turn as events and state flow, or **Temporal UI** to show the Workflow history.
+5. Open **Agent Kit console** to show the same turn as events and state flow, or **Temporal UI** to show the Workflow history.
 
 The console can also start **Ziggy (Conversational, Subagent)**, which hands each script to a separate script-runner agent running as a child Workflow. The demo view shows that variant's trip board from the subagent.
 
@@ -60,31 +60,33 @@ Run the tests with `uv run pytest`. They start their own dev server and need no 
 
 ```
 agent_harness_demo/
-  ziggy/        the agents, their tools, and the trip board (copied from the harness's Monty example)
+  ziggy/        the agents, their tools, and the trip board (copied from the kit's Monty example)
   web.py        the browser API and both views, scoped to the signed-in person
   worker.py     one worker for all three agent Workflows and their Activities
   config.py     environment settings shared by both processes
-ui/                         the demo view: Svelte 5 on @temporalio/agent-harness-svelte
-  src/generated/            TypeScript types for ZiggyChatAgent, generated from the Python class
+ui/                         the demo view: Svelte 5 on @temporalio/agent-kit-svelte
+  src/generated/            TypeScript types for ZiggyChatAgent, generated from its schema document
 deploy/demoproject.yaml     copy of the catalog DemoProject (the platform repo has the live ones)
 ```
 
-The harness comes from PyPI, pinned to `temporal-agent-harness==0.6.0`. The console is served unchanged from the installed package. The demo view uses the harness's npm packages, `@temporalio/agent-harness-svelte` and `-client` 0.1.0, which follow a session's event stream and expose its messages, pending approvals, and the `trip_board` state. It calls the same routes as the console, so it gets the same per-person scoping. The Dockerfile builds it in a Node stage; the runtime image has no Node.
+Agent Kit comes from PyPI, pinned to `temporal-agent-kit==0.12.1`. The console is served unchanged from the installed package. The demo view uses the kit's npm packages, `@temporalio/agent-kit-svelte` and `-client` 0.6.1, which follow a session's event stream and expose its messages, pending approvals, and the `trip_board` state. It calls the same routes as the console, so it gets the same per-person scoping. The Dockerfile builds it in a Node stage; the runtime image has no Node.
 
-When the agent's handlers or `TripBoard` change, regenerate the types. The generator ships in the harness repo, not on npm:
+### Regenerating the agent schemas
+
+Each conversational agent has a schema document next to `agents.toml` (`ZiggyChatAgent.schema.json`, `ZiggyChatSubagentAgent.schema.json`). The web process reads the agent's init data from it, and the demo view's types are generated from it. When an agent's init data, handlers or `TripBoard` change, regenerate both; `tests/test_agent_schemas.py` fails while a schema document is stale:
 
 ```bash
-uv run temporal-agent-harness schema agent_harness_demo.ziggy.conversational_workflow:ZiggyChatAgentWorkflow > /tmp/ziggy.json
-# in a checkout of temporal-agent-harness at the pinned tag:
-(cd packages/codegen && npm ci && npm run build)
-node packages/codegen/dist/src/cli.js /tmp/ziggy.json -o <this repo>/ui/src/generated/ZiggyChatAgent.ts
+uv run temporal-agent-kit schema agent_harness_demo.ziggy.conversational_workflow:ZiggyChatAgentWorkflow -o agent_harness_demo/ziggy/ZiggyChatAgent.schema.json
+uv run temporal-agent-kit schema agent_harness_demo.ziggy.conversational_subagent_workflow:ZiggyChatSubagentWorkflow -o agent_harness_demo/ziggy/ZiggyChatSubagentAgent.schema.json
+npx @temporalio/agent-kit-codegen@0.6.1 agent_harness_demo/ziggy/ZiggyChatAgent.schema.json -o ui/src/generated/ZiggyChatAgent.ts
 ```
 
 Changes from the upstream example:
 
-- **No session-manager Workflow.** The harness's web app keeps one long-running session manager per namespace and lists every agent in the namespace. Here, the API starts each agent Workflow directly and lists sessions with a Visibility query on the caller's ID prefix.
+- **No session-manager Workflow.** The kit's web app keeps one long-running session manager per namespace and lists every agent in the namespace. Here, the API starts each agent Workflow directly and lists sessions with a Visibility query on the caller's ID prefix.
 - **Per-person isolation.** Session IDs are `<task queue>.<owner>.<session>`, where `owner` is a hash of `X-Temporal-Auth-Subject`. Every route that names a session returns 404 unless the caller owns it, or owns the agent that started it as a subagent.
 - **Task queue from one variable.** The web and worker processes both read `TEMPORAL_TASK_QUEUE`. Subagents run on their parent's queue (`workflow.info().task_queue`) rather than a hard-coded one.
+- **Init data checked before the start.** The kit's web app only checks that an agent gets init data when it requires it, and leaves the contents to the agent. This API also validates the data against the agent's model and refuses bad data with a 422, so it never starts a session the agent would refuse.
 - **Bounded sessions.** Agents wait for messages indefinitely, so every session starts with a Workflow execution timeout (`SESSION_TIMEOUT_HOURS`, 24 by default). Subagents close with their parent.
 
 ## Configuration
@@ -96,7 +98,7 @@ Changes from the upstream example:
 | `GEMINI_API_KEY` | worker | required | Model calls. |
 | `SERPAPI_API_KEY` | worker | unset | Real flight search: Google Flights schedules, flight numbers and economy prices through [SerpApi](https://serpapi.com/google-flights-api). Unset, search is simulated. Seats and bookings are always simulated. |
 | `PAYLOAD_BUCKET` | both | unset | S3 bucket for payloads over 1.5 MB. |
-| `PAYLOAD_DIR` | both | harness default | Local directory for those payloads when no bucket is set. Web and worker must share it. |
+| `PAYLOAD_DIR` | both | kit default | Local directory for those payloads when no bucket is set. Web and worker must share it. |
 | `TRUST_AUTH_HEADERS` | web | `false` | Read the user from `X-Temporal-Auth-Subject`. Set it only behind the catalog ingress. |
 | `DEV_USER` | web | `local-dev` | The user when auth headers aren't trusted. |
 | `SESSION_TIMEOUT_HOURS` | web | `24` | Execution timeout for each session. |
@@ -120,7 +122,7 @@ Changes from the upstream example:
 ## Known gaps
 
 - **IAM trust for the payload role.** The payload bucket's IAM role, shared with today's Monty project, trusts Monty's service accounts only. The new `agent-harness` project and its crashable namespaces need to be added before cutover, or the bucket and role need replacing with ones named for this project.
-- **`google-genai` cap.** The harness's Gemini plugin imports `google.genai._interactions`, which `google-genai` 2.9.0 removed. The harness declares only `>=2.0.0`, so `pyproject.toml` caps it at `<2.9`. This is worth reporting upstream.
+- **`google-genai` cap.** The kit's Gemini plugin imports `google.genai._interactions`, which `google-genai` 2.9.0 removed. The kit declares only `>=2.0.0`, so `pyproject.toml` caps it at `<2.9`. This is worth reporting upstream.
 - **Messages wait for a worker.** Sending a message is a Workflow Update, which a worker must accept. While no worker runs, the send stays open and the demo view says so; it goes through when a worker returns, unless the browser gives up on the request first.
-- **Private harness helpers.** `web.py` imports a few private helpers from `temporal_agent_harness.web.app`, so that the UI gets byte-identical responses. That's safe only while the harness version is pinned. Review them when upgrading.
-- **Upgrade path.** Bump the harness pin, re-copy `examples/monty` from the matching tag, and keep the two local changes: no hard-coded queue, and subagents inherit their parent's queue. Workflow changes ship as a new Worker Deployment Version without patching, because agents are PINNED.
+- **Private kit helpers.** `web.py` imports a few private helpers from `temporal_agent_kit.web.app`, so that the UI gets byte-identical responses. That's safe only while the kit version is pinned. Review them when upgrading.
+- **Upgrade path.** Bump the kit pin and the npm packages together (the kit's `typescript/packages/*/package.json` at the PyPI tag gives the matching npm version), re-copy `python/examples/monty` from the matching tag, regenerate the schemas, and keep the two local changes: no hard-coded queue, and subagents inherit their parent's queue. Workflow changes ship as a new Worker Deployment Version without patching, because agents are PINNED.

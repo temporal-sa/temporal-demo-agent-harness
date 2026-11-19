@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { AgentSession } from "@temporalio/agent-harness-svelte";
+  import { AgentSession } from "@temporalio/agent-kit-svelte";
   import type { ZiggyChatAgent, TripBoard as Board } from "./generated/ZiggyChatAgent.ts";
   import ApprovalQueue from "./ApprovalQueue.svelte";
   import ChoiceCards from "./ChoiceCards.svelte";
