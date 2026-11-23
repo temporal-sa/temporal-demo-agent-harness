@@ -53,7 +53,7 @@ with workflow.unsafe.imports_passed_through():
     from .models import TravelerContext
 
 
-SUPPORTED_MODELS = ("gemini-3.8-flash", "gemini-3.1-flash-lite")
+SUPPORTED_MODELS = ("gemini-3.8-flash", "gemini-3.5-flash-lite")
 DEFAULT_MODEL = SUPPORTED_MODELS[0]
 
 
