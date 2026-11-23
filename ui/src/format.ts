@@ -56,10 +56,10 @@ export function policyLabel(policy: Policy): string {
   return POLICIES.find((p) => p.value === policy)?.label ?? policy;
 }
 
-export type Model = "gemini-3.8-flash" | "gemini-3.1-flash-lite";
+export type Model = "gemini-3.8-flash" | "gemini-3.5-flash-lite";
 
 /** The models `set_model` accepts; the first is the agent's default. */
-export const MODELS: Model[] = ["gemini-3.8-flash", "gemini-3.1-flash-lite"];
+export const MODELS: Model[] = ["gemini-3.8-flash", "gemini-3.5-flash-lite"];
 
 /** A one-line summary of a tool call's arguments, for a list of many at once. */
 export function callSummary(toolName: string, input: Record<string, unknown>): string {

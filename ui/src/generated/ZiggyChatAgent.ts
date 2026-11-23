@@ -21,7 +21,7 @@ export interface PolicyUpdate {
  * Which model this Ziggy session should use for subsequent turns.
  */
 export interface SetModel {
-  model: "gemini-3.8-flash" | "gemini-3.1-flash-lite";
+  model: "gemini-3.8-flash" | "gemini-3.5-flash-lite";
 }
 /**
  * Free-form natural-language text from the user (the input to a plain chat handler).
